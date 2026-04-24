@@ -5,8 +5,87 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views.UserControls"
              mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800">
+             Height="650" Width="1050"
+Background="SteelBlue" FontFamily="Segoe UI" FontSize="12">
     <Grid>
-            
+        <Grid.RowDefinitions>
+            <RowDefinition Height="25"/>
+            <RowDefinition Height="35"/>
+            <RowDefinition Height="60"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+        </Grid.RowDefinitions>
+        <Menu Grid.Row="0" Background="#F3F3F3" Foreground="Black">
+            <MenuItem Header="Hệ thống"/>
+            <MenuItem Header="Dữ liệu Revit"/>
+            <MenuItem Header="Tính toán"/>
+            <MenuItem Header="Trợ giúp"/>
+        </Menu>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Background="White">
+            <Button x:Name="btnTabTep" Content="Dự án" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabNhapLieu" Content="Chọn cấu kiện" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabTaiTrong" Content="Tải trọng" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabKiemTra" Content="Kiểm tra" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabBaoCao" Content="Thống kê" Click="Tab_Click" Padding="15,0" Background="#D6EAF8" BorderThickness="0,0,1,0" BorderBrush="#EEE" FontWeight="Bold"/>
+        </StackPanel>
+        <Grid Grid.Row="2" Background="#F8F9F9">
+            <StackPanel x:Name="panelBaoCao" Orientation="Horizontal" Visibility="Visible">
+                <Button Content=" Xuất bảng khối lượng (Excel)" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+                <Button Content=" Xuất thuyết minh tính toán" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+                <Button Content=" VẼ MODEL VÁN KHUÔN (AUTOGEN)" Margin="5" Padding="10,5" Background="#27AE60" Foreground="White" FontWeight="Bold"/>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="3" Margin="15,10" Background="#EBEDEF">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" BorderBrush="DimGray" BorderThickness="1" CornerRadius="3" Background="White" Padding="15" Margin="0,0,5,0">
+                <StackPanel>
+                    <TextBlock Text="BẢNG THỐNG KÊ CHI TIẾT VẬT TƯ VÁN KHUÔN" Foreground="#2E86C1" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                    <DataGrid x:Name="dgMaterialSummary" Background="White" BorderThickness="1" AutoGenerateColumns="False" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="STT" Width="40"/>
+                            <DataGridTextColumn Header="Tên vật tư" Width="*"/>
+                            <DataGridTextColumn Header="Quy cách (mm)" Width="150"/>
+                            <DataGridTextColumn Header="Đơn vị" Width="60"/>
+                            <DataGridTextColumn Header="Số lượng" Width="80"/>
+                            <DataGridTextColumn Header="Ghi chú" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" BorderBrush="DimGray" BorderThickness="1" CornerRadius="3" Background="White" Padding="15" Margin="5,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="TỔNG HỢP NHANH" Foreground="#2E86C1" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                    <Border Background="#F9F9F9" Padding="10" CornerRadius="5" Margin="0,5">
+                        <StackPanel>
+                            <TextBlock Text="Diện tích cốp pha sàn:" Foreground="Gray"/>
+                            <TextBlock Text="-- m2" FontSize="18" FontWeight="Bold" Foreground="#2C3E50"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="#F9F9F9" Padding="10" CornerRadius="5" Margin="0,5">
+                        <StackPanel>
+                            <TextBlock Text="Tổng số lượng xà gồ lớp 1:" Foreground="Gray"/>
+                            <TextBlock Text="-- Thanh" FontSize="18" FontWeight="Bold" Foreground="#2C3E50"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="#F9F9F9" Padding="10" CornerRadius="5" Margin="0,5">
+                        <StackPanel>
+                            <TextBlock Text="Tổng số lượng cây chống:" Foreground="Gray"/>
+                            <TextBlock Text="-- Bộ" FontSize="18" FontWeight="Bold" Foreground="#2C3E50"/>
+                        </StackPanel>
+                    </Border>
+                    <Separator Margin="0,15"/>
+                    <CheckBox Content="Bao gồm phụ kiện (Chốt, khóa, giằng)" Margin="0,5"/>
+                    <CheckBox Content="Tính toán hao hụt vật tư (...%)" Margin="0,5"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+        <StatusBar Grid.Row="4" Background="SteelBlue" Foreground="White">
+            <StatusBarItem Content="Sẵn sàng xuất báo cáo"/>
+            <Separator/>
+            <StatusBarItem Content=" "/>
+        </StatusBar>
     </Grid>
 </UserControl>
