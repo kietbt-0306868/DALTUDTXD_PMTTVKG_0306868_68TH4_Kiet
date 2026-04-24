@@ -1,0 +1,9 @@
+﻿<Application x:Class="DALTUDTXD_68TH4_PMTKVK_REVITAPI.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:DALTUDTXD_68TH4_PMTKVK_REVITAPI"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+         
+    </Application.Resources>
+</Application>
