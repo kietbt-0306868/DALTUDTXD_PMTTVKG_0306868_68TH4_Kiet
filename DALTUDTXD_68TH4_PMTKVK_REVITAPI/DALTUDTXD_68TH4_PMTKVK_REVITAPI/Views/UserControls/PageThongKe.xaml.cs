@@ -24,5 +24,29 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views.UserControls
         {
             InitializeComponent();
         }
+
+        private void Tab_Click(object sender, RoutedEventArgs e)
+        {
+            // Basic handler to update the visual state of the tab buttons.
+            var btn = sender as Button;
+            if (btn == null) return;
+
+            var parent = btn.Parent as Panel;
+            if (parent == null) return;
+
+            foreach (var child in parent.Children.OfType<Button>())
+            {
+                if (child == btn)
+                {
+                    child.Background = new SolidColorBrush(Color.FromRgb(214, 234, 248)); // #D6EAF8
+                    child.FontWeight = FontWeights.Bold;
+                }
+                else
+                {
+                    child.Background = Brushes.Transparent;
+                    child.FontWeight = FontWeights.Normal;
+                }
+            }
+        }
     }
 }
