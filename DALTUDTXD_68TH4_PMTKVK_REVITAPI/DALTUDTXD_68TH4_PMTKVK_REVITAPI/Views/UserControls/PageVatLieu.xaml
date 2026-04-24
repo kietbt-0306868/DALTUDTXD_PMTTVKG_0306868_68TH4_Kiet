@@ -4,9 +4,85 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views.UserControls"
-             mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800">
+             mc:Ignorable="d"
+             Height="650" Width="1050"
+             Background="SteelBlue" FontFamily="Segoe UI" FontSize="12">
     <Grid>
-            
+        <Grid.RowDefinitions>
+            <RowDefinition Height="25"/>
+            <RowDefinition Height="35"/>
+            <RowDefinition Height="60"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+        </Grid.RowDefinitions>
+        <Menu Grid.Row="0" Background="#F3F3F3" Foreground="Black">
+            <MenuItem Header="Hệ thống"/>
+            <MenuItem Header="Dữ liệu Revit"/>
+            <MenuItem Header="Tính toán"/>
+            <MenuItem Header="Trợ giúp"/>
+        </Menu>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Background="White">
+            <Button x:Name="btnTabTep" Content="Dự án" Click="Tab_Click" Padding="15,0" Background="#D6EAF8" BorderThickness="0,0,1,0" BorderBrush="#EEE" FontWeight="Bold"/>
+            <Button x:Name="btnTabNhapLieu" Content="Chọn cấu kiện" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabTaiTrong" Content="Tải trọng" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabKiemTra" Content="Kiểm tra" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabBaoCao" Content="Thống kê" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+        </StackPanel>
+        <Grid Grid.Row="2" Background="#F8F9F9">
+            <StackPanel x:Name="panelTep" Orientation="Horizontal" Visibility="Visible">
+                <Button Content=" Thông tin chung" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+                <Button Content=" Lưu thông tin dự án" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+                <Button Content=" Xuất báo cáo Setup" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+            </StackPanel>
+            <StackPanel x:Name="panelNhapLieu" Orientation="Horizontal" Visibility="Collapsed">
+                <Button Content=" Quét chọn Sàn (Pick Object)" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+                <Button Content=" Chọn theo Level" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+            </StackPanel>
+            <StackPanel x:Name="panelTaiTrong" Orientation="Horizontal" Visibility="Collapsed">
+                <Button Content=" Tĩnh tải sàn" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+            </StackPanel>
+            <StackPanel x:Name="panelKiemTra" Orientation="Horizontal" Visibility="Collapsed">
+                <Button Content=" Kiểm tra độ võng" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+            </StackPanel>
+            <StackPanel x:Name="panelBaoCao" Orientation="Horizontal" Visibility="Collapsed">
+                <Button Content=" Tổng hợp khối lượng" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="3" Margin="15,10" Background="#EBEDEF">
+            <Border BorderBrush="DimGray" BorderThickness="1" CornerRadius="3" Background="White" Padding="20">
+                <StackPanel>
+                    <TextBlock Text="THIẾT LẬP THÔNG TIN DỰ ÁN" Foreground="#2E86C1" FontWeight="Bold" FontSize="16" Margin="0,0,0,20" HorizontalAlignment="Center"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="35"/>
+                            <RowDefinition Height="35"/>
+                            <RowDefinition Height="35"/>
+                            <RowDefinition Height="35"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Tên dự án:" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="Dự án thiết kế ván khuôn sàn"/>
+                        <TextBlock Grid.Row="1" Text="Địa điểm:" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="Hà Nội, Việt Nam"/>
+                        <TextBlock Grid.Row="2" Text="Chủ đầu tư:" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="HUCE - Đại học Xây dựng Hà Nội"/>
+                        <TextBlock Grid.Row="3" Text="Người thực hiện:" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="Bùi Thành Kiệt"/>
+                        <TextBlock Grid.Row="4" Text="Ghi chú dự án:" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" Margin="5,10,5,5" Height="100" TextWrapping="Wrap" AcceptsReturn="True"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+        <StatusBar Grid.Row="4" Background="SteelBlue" Foreground="White">
+            <StatusBarItem Content="Hệ thống sẵn sàng"/>
+            <Separator/>
+            <StatusBarItem Content="Bùi Thành Kiệt - MSV: 0306868"/>
+        </StatusBar>
     </Grid>
-</UserControl>
+    </UserControl>
+
