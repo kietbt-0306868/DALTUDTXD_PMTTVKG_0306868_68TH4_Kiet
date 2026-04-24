@@ -5,8 +5,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views.UserControls"
              mc:Ignorable="d"
-             Height="650" Width="1050"
-             Background="SteelBlue" FontFamily="Segoe UI" FontSize="12">
+            Height="650" Width="1050"
+Background="SteelBlue" FontFamily="Segoe UI" FontSize="12">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="25"/>
@@ -22,67 +22,60 @@
             <MenuItem Header="Trợ giúp"/>
         </Menu>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Background="White">
-            <Button x:Name="btnTabTep" Content="Dự án" Click="Tab_Click" Padding="15,0" Background="#D6EAF8" BorderThickness="0,0,1,0" BorderBrush="#EEE" FontWeight="Bold"/>
-            <Button x:Name="btnTabNhapLieu" Content="Chọn cấu kiện" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabTep" Content="Dự án" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
+            <Button x:Name="btnTabNhapLieu" Content="Chọn cấu kiện" Click="Tab_Click" Padding="15,0" Background="#D6EAF8" BorderThickness="0,0,1,0" BorderBrush="#EEE" FontWeight="Bold"/>
             <Button x:Name="btnTabTaiTrong" Content="Tải trọng" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
             <Button x:Name="btnTabKiemTra" Content="Kiểm tra" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
             <Button x:Name="btnTabBaoCao" Content="Thống kê" Click="Tab_Click" Padding="15,0" Background="Transparent" BorderThickness="0,0,1,0" BorderBrush="#EEE"/>
         </StackPanel>
         <Grid Grid.Row="2" Background="#F8F9F9">
-            <StackPanel x:Name="panelTep" Orientation="Horizontal" Visibility="Visible">
-                <Button Content=" Thông tin chung" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
-                <Button Content=" Lưu thông tin dự án" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
-                <Button Content=" Xuất báo cáo Setup" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
-            </StackPanel>
-            <StackPanel x:Name="panelNhapLieu" Orientation="Horizontal" Visibility="Collapsed">
-                <Button Content=" Quét chọn Sàn (Pick Object)" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
-                <Button Content=" Chọn theo Level" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
-            </StackPanel>
-            <StackPanel x:Name="panelTaiTrong" Orientation="Horizontal" Visibility="Collapsed">
-                <Button Content=" Tĩnh tải sàn" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
-            </StackPanel>
-            <StackPanel x:Name="panelKiemTra" Orientation="Horizontal" Visibility="Collapsed">
-                <Button Content=" Kiểm tra độ võng" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
-            </StackPanel>
-            <StackPanel x:Name="panelBaoCao" Orientation="Horizontal" Visibility="Collapsed">
-                <Button Content=" Tổng hợp khối lượng" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+            <StackPanel x:Name="panelNhapLieu" Orientation="Horizontal" Visibility="Visible">
+                <Button Content=" Quét chọn đối tượng (Pick)" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+                <Button Content=" Lọc theo Level" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB"/>
+                <Button Content=" Xóa danh sách đã chọn" Margin="5" Padding="10,5" Background="White" BorderBrush="#D5DBDB" Foreground="Red"/>
             </StackPanel>
         </Grid>
         <Grid Grid.Row="3" Margin="15,10" Background="#EBEDEF">
-            <Border BorderBrush="DimGray" BorderThickness="1" CornerRadius="3" Background="White" Padding="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" BorderBrush="DimGray" BorderThickness="1" CornerRadius="3" Background="White" Padding="15" Margin="0,0,5,0">
                 <StackPanel>
-                    <TextBlock Text="THIẾT LẬP THÔNG TIN DỰ ÁN" Foreground="#2E86C1" FontWeight="Bold" FontSize="16" Margin="0,0,0,20" HorizontalAlignment="Center"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="35"/>
-                            <RowDefinition Height="35"/>
-                            <RowDefinition Height="35"/>
-                            <RowDefinition Height="35"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="Tên dự án:" VerticalAlignment="Center"/>
-                        <TextBox Grid.Row="0" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="Dự án thiết kế ván khuôn sàn"/>
-                        <TextBlock Grid.Row="1" Text="Địa điểm:" VerticalAlignment="Center"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="Hà Nội, Việt Nam"/>
-                        <TextBlock Grid.Row="2" Text="Chủ đầu tư:" VerticalAlignment="Center"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="HUCE - Đại học Xây dựng Hà Nội"/>
-                        <TextBlock Grid.Row="3" Text="Người thực hiện:" VerticalAlignment="Center"/>
-                        <TextBox Grid.Row="3" Grid.Column="1" Margin="5" VerticalContentAlignment="Center" Text="Bùi Thành Kiệt"/>
-                        <TextBlock Grid.Row="4" Text="Ghi chú dự án:" Margin="0,10,0,0"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" Margin="5,10,5,5" Height="100" TextWrapping="Wrap" AcceptsReturn="True"/>
-                    </Grid>
+                    <TextBlock Text="DANH SÁCH CẤU KIỆN ĐÃ CHỌN TỪ MÔ HÌNH" Foreground="#2E86C1" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                    <DataGrid x:Name="dgRevitElements" Background="White" BorderThickness="1" AutoGenerateColumns="False" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Element ID" Width="100"/>
+                            <DataGridTextColumn Header="Category" Width="120"/>
+                            <DataGridTextColumn Header="Family Name / Type" Width="*"/>
+                            <DataGridTextColumn Header="Diện tích (m2)" Width="100"/>
+                            <DataGridTextColumn Header="Chiều dày (mm)" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" BorderBrush="DimGray" BorderThickness="1" CornerRadius="3" Background="White" Padding="15" Margin="5,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="BỘ LỌC NHANH" Foreground="#2E86C1" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                    <TextBlock Text="Chọn Level làm việc:" Margin="0,5"/>
+                    <ComboBox IsEditable="True" Text="-- Chọn tầng --" Margin="0,5"/>
+                    <TextBlock Text="Loại cấu kiện:" Margin="0,10,0,5"/>
+                    <CheckBox Content="Sàn (Floors)" IsChecked="True" Margin="0,2"/>
+                    <CheckBox Content="Dầm (Structural Framing)" Margin="0,2"/>
+                    <CheckBox Content="Cột (Structural Columns)" Margin="0,2"/>
+                    <Separator Margin="0,15"/>
+                    <TextBlock Text="Thông tin hình học:" FontWeight="Bold" Margin="1"/>
+                    <TextBlock Text="Số lượng cấu kiện: --" Margin="0,2" Foreground="DimGray"/>
+                    <TextBlock Text="Tổng diện tích: -- m2" Margin="0,2" Foreground="DimGray"/>
                 </StackPanel>
             </Border>
         </Grid>
         <StatusBar Grid.Row="4" Background="SteelBlue" Foreground="White">
-            <StatusBarItem Content="Hệ thống sẵn sàng"/>
+            <StatusBarItem Content="Sẵn sàng quét chọn đối tượng từ Revit..."/>
             <Separator/>
-            <StatusBarItem Content="Bùi Thành Kiệt - MSV: 0306868"/>
+            <StatusBarItem Content="Bùi Thành Kiệt - MSSV: 0306868"/>
         </StatusBar>
     </Grid>
-    </UserControl>
+</UserControl>
+
 
