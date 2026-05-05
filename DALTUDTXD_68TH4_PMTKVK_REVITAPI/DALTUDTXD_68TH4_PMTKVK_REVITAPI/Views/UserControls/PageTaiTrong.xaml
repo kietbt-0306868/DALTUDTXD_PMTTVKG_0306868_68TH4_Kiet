@@ -5,7 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views.UserControls"
              Height="650" Width="1050"
-             Background="SteelBlue" FontFamily="Segoe UI" FontSize="12">
+             Background="White" FontFamily="Segoe UI" FontSize="12">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="25"/>
@@ -73,7 +73,7 @@
                 </StackPanel>
             </Border>
         </Grid>
-        <StatusBar Grid.Row="4" Background="SteelBlue" Foreground="White">
+        <StatusBar Grid.Row="4" Background="White" Foreground="Black">
             <StatusBarItem Content="Load Parameters: Updated"/>
             <Separator/>
             <StatusBarItem Content="..."/>
