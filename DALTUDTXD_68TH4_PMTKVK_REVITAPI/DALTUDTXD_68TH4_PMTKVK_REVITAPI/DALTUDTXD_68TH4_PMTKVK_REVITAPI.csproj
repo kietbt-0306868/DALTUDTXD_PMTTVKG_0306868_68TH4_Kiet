@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{58441217-AB8D-4DAB-8A18-639E71FCB192}</ProjectGuid>
+    <ProjectGuid>{FBA1DD48-8F25-B637-BC9D-D6DCE15CC101}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>DALTUDTXD_68TH4_PMTKVK_REVITAPI</RootNamespace>
     <AssemblyName>DALTUDTXD_68TH4_PMTKVK_REVITAPI</AssemblyName>
