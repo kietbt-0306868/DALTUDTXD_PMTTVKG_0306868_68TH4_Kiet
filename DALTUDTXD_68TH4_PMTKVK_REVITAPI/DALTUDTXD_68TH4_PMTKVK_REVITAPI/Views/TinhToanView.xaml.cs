@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,14 +13,14 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views.UserControls
+namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views
 {
     /// <summary>
-    /// Interaction logic for PageDuAn.xaml
+    /// Interaction logic for TinhToanView.xaml
     /// </summary>
-    public partial class PageDuAn : UserControl
+    public partial class TinhToanView : UserControl
     {
-        public PageDuAn()
+        public TinhToanView()
         {
             InitializeComponent();
         }

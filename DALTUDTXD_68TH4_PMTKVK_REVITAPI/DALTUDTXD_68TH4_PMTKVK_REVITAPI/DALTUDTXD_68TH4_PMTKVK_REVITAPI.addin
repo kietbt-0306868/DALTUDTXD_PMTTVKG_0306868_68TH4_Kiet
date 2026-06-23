@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Command">
+    <!-- Tên của lệnh hiển thị trong tab Add-ins của Revit -->
+    <Name>Thiết kế ván khuôn sàn</Name>
+    <Text>Thiết kế ván khuôn sàn</Text>
+    
+    <!-- Đường dẫn đến tệp DLL sau khi build. -->
+    <Assembly>C:\Users\kiet6\Downloads\DALTUDTXD_PMTKVK_68TH4\DALTUDTXD_PMTTVKG_0306868_68TH4_Kiet\DALTUDTXD_68TH4_PMTKVK_REVITAPI\DALTUDTXD_68TH4_PMTKVK_REVITAPI\bin\Debug\DALTUDTXD_68TH4_PMTKVK_REVITAPI.dll</Assembly>
+    
+    <!-- Tên lớp đầy đủ chứa IExternalCommand (bao gồm cả namespace) -->
+    <FullClassName>DALTUDTXD_68TH4_PMTKVK_REVITAPI.AppCommand</FullClassName>
+    
+    <!-- ID duy nhất cho Add-in (Guid ngẫu nhiên đã khởi tạo) -->
+    <ClientId>8f844de1-ee38-4e89-98ff-8a62f558a74e</ClientId>
+    
+    <!-- Thông vị nhà phát triển -->
+    <VendorId>KietBT</VendorId>
+    <VendorDescription>KietBT - 68TH4 - Thiết kế ván khuôn sàn</VendorDescription>
+  </AddIn>
+</RevitAddIns>

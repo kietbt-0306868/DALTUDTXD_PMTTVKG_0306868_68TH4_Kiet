@@ -1,28 +1,52 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
-        public MainWindow()
+        public DuLieuViewModel SharedDuLieuViewModel { get; private set; }
+
+        public MainWindow(DuLieuViewModel duLieuViewModel = null)
         {
             InitializeComponent();
+            
+            SharedDuLieuViewModel = duLieuViewModel ?? new DuLieuViewModel(new MessageBoxDialogService());
+
+            if (SharedDuLieuViewModel.RevitDoc == null)
+            {
+                SharedDuLieuViewModel.InitializeRevitContext(null, null, Navigate);
+            }
+            else
+            {
+                // Must still wire up the navigation action if initialized from Revit
+                SharedDuLieuViewModel.InitializeRevitContext(SharedDuLieuViewModel.RevitDoc, SharedDuLieuViewModel.RevitUIDoc, Navigate);
+            }
+            
+            DuLieuTab.DataContext = SharedDuLieuViewModel;
+            TinhToanTab.DataContext = new TinhToanViewModel(SharedDuLieuViewModel);
+            ThongSoTab.DataContext = new ThongSoViewModel(SharedDuLieuViewModel);
+            KetQuaTab.DataContext = new KetQuaViewModel(SharedDuLieuViewModel);
+        }
+
+        public void Navigate(string tabName)
+        {
+            DuLieuTab.Visibility = Visibility.Collapsed;
+            TinhToanTab.Visibility = Visibility.Collapsed;
+            ThongSoTab.Visibility = Visibility.Collapsed;
+            KetQuaTab.Visibility = Visibility.Collapsed;
+
+            switch (tabName)
+            {
+                case "DuLieuView": DuLieuTab.Visibility = Visibility.Visible; break;
+                case "TinhToanView":
+                case "Report": TinhToanTab.Visibility = Visibility.Visible; break;
+                case "ThongSoView":
+                case "Settings": ThongSoTab.Visibility = Visibility.Visible; break;
+                case "KetQuaView": KetQuaTab.Visibility = Visibility.Visible; break;
+            }
         }
     }
 }
