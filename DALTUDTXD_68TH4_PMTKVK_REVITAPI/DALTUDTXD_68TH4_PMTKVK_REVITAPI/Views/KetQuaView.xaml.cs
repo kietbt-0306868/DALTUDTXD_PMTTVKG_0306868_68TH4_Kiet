@@ -2,12 +2,14 @@ using System.Windows.Controls;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views
 {
-    public partial class KetQuaView.xaml : UserControl
+    /// <summary>
+    /// Interaction logic for KetQuaView.xaml
+    /// </summary>
+    public partial class KetQuaView : UserControl
     {
-        public KetQuaView.xaml()
+        public KetQuaView()
         {
             InitializeComponent();
         }
     }
 }
-

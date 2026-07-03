@@ -7,28 +7,29 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
 {
     public partial class MainWindow : Window
     {
-        public DuLieuViewModel SharedDuLieuViewModel { get; private set; }
+        public SharedDataViewModel SharedSharedDataViewModel { get; private set; }
 
-        public MainWindow(DuLieuViewModel duLieuViewModel = null)
+        public MainWindow(SharedDataViewModel SharedDataViewModel = null)
         {
             InitializeComponent();
             
-            SharedDuLieuViewModel = duLieuViewModel ?? new DuLieuViewModel(new MessageBoxDialogService());
+            SharedSharedDataViewModel = SharedDataViewModel ?? new SharedDataViewModel(new MessageBoxDialogService());
 
-            if (SharedDuLieuViewModel.RevitDoc == null)
+            if (SharedSharedDataViewModel.RevitDoc == null)
             {
-                SharedDuLieuViewModel.InitializeRevitContext(null, null, Navigate);
+                SharedSharedDataViewModel.InitializeRevitContext(null, null, Navigate);
             }
             else
             {
                 // Must still wire up the navigation action if initialized from Revit
-                SharedDuLieuViewModel.InitializeRevitContext(SharedDuLieuViewModel.RevitDoc, SharedDuLieuViewModel.RevitUIDoc, Navigate);
+                SharedSharedDataViewModel.InitializeRevitContext(SharedSharedDataViewModel.RevitDoc, SharedSharedDataViewModel.RevitUIDoc, Navigate);
             }
             
-            DuLieuTab.DataContext = SharedDuLieuViewModel;
-            TinhToanTab.DataContext = new TinhToanViewModel(SharedDuLieuViewModel);
-            ThongSoTab.DataContext = new ThongSoViewModel(SharedDuLieuViewModel);
-            KetQuaTab.DataContext = new KetQuaViewModel(SharedDuLieuViewModel);
+            DuLieuTab.DataContext = SharedSharedDataViewModel;
+            TinhToanTab.DataContext = new TinhToanViewModel(SharedSharedDataViewModel);
+            ThongSoTab.DataContext = new ThongSoViewModel(SharedSharedDataViewModel);
+            KetQuaTab.DataContext = new KetQuaViewModel(SharedSharedDataViewModel);
+            Preview3DTab.DataContext = new Preview3DViewModel(SharedSharedDataViewModel);
         }
 
         public void Navigate(string tabName)
@@ -37,6 +38,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
             TinhToanTab.Visibility = Visibility.Collapsed;
             ThongSoTab.Visibility = Visibility.Collapsed;
             KetQuaTab.Visibility = Visibility.Collapsed;
+            Preview3DTab.Visibility = Visibility.Collapsed;
 
             switch (tabName)
             {
@@ -46,6 +48,25 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                 case "ThongSoView":
                 case "Settings": ThongSoTab.Visibility = Visibility.Visible; break;
                 case "KetQuaView": KetQuaTab.Visibility = Visibility.Visible; break;
+                case "Preview3DView": Preview3DTab.Visibility = Visibility.Visible; break;
+            }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            
+            if (TinhToanTab.DataContext is IDisposable tinhToanVm)
+            {
+                tinhToanVm.Dispose();
+            }
+            if (ThongSoTab.DataContext is IDisposable thongSoVm)
+            {
+                thongSoVm.Dispose();
+            }
+            if (KetQuaTab.DataContext is IDisposable ketQuaVm)
+            {
+                ketQuaVm.Dispose();
             }
         }
     }

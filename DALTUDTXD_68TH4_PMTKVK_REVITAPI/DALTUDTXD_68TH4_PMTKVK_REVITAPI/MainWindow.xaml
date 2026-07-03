@@ -12,5 +12,6 @@
         <views:TinhToanView x:Name="TinhToanTab" Visibility="Collapsed" />
         <views:ThongSoView x:Name="ThongSoTab" Visibility="Collapsed" />
         <views:KetQuaView x:Name="KetQuaTab" Visibility="Collapsed" />
+        <views:Preview3DView x:Name="Preview3DTab" Visibility="Collapsed" />
     </Grid>
 </Window>

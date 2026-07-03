@@ -1,17 +1,14 @@
 using System;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 {
-    public class KetQuaHienThi : INotifyPropertyChanged
+    public class KetQuaHienThi
     {
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
+        public string NoiDungKiemTra { get; set; }
+        public string GiaTriThucTe { get; set; }
+        public string GiaTriChoPhep { get; set; }
+        public string KetLuan { get; set; }
+        public string MauNenTrangThai { get; set; }
+        public string MauChuTrangThai { get; set; }
     }
 }
-
