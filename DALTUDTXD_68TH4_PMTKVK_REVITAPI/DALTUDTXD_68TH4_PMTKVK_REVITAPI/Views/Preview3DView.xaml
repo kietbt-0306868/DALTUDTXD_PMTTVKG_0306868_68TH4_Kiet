@@ -59,7 +59,12 @@
                             Background="Transparent"
                             IsRotationEnabled="True"
                             IsPanEnabled="True"
-                            IsZoomEnabled="True">
+                            IsZoomEnabled="True"
+                            EnableDecimation="True"
+                            DecimationFactor="0.5"
+                            FXAASamples="4"
+                            RenderOptions.EdgeMode="Aliased"
+                            TexturingQuality="Low">
             <hx:DefaultLights />
             <ModelVisual3D Content="{Binding ModelGroup}" />
         </hx:HelixViewport3D>
