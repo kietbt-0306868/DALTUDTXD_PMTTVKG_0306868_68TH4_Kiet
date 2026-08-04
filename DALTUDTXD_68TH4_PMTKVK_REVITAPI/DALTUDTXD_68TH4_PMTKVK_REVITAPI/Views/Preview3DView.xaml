@@ -60,8 +60,6 @@
                             IsRotationEnabled="True"
                             IsPanEnabled="True"
                             IsZoomEnabled="True"
-                            EnableDecimation="True"
-                            DecimationFactor="0.5"
                             FXAASamples="4"
                             RenderOptions.EdgeMode="Aliased"
                             TexturingQuality="Low">
