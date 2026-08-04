@@ -48,7 +48,7 @@
                     <!-- Bảng tiên lượng cấu kiện chọn -->
                     <Border Grid.Row="0" BorderBrush="#ABB2B9" BorderThickness="1" CornerRadius="3" Background="White" Padding="15" Margin="0,0,0,5">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="BẢNG TIÊN LƯỢNG VẬT TƯ (CÁC SÀN ĐANG CHỌN)" Foreground="#2C3E50" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedComponentQuantitiesTitle}" Foreground="#2C3E50" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
                             
                             <DataGrid ItemsSource="{Binding MaterialQuantities}" 
                                       AutoGenerateColumns="False" 
@@ -71,7 +71,7 @@
                     <!-- Danh sách các sàn trong dự án (Dạng Thẻ) -->
                     <Border Grid.Row="1" BorderBrush="#ABB2B9" BorderThickness="1" CornerRadius="3" Background="White" Padding="15" Margin="0,5,0,0">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="DANH SÁCH SÀN TRONG DỰ ÁN" Foreground="#2C3E50" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding ProjectComponentListTitle}" Foreground="#2C3E50" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
                             
                             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,5,0">
                                 <ItemsControl ItemsSource="{Binding FloorElements}">
@@ -118,15 +118,8 @@
                                                                 <TextBlock Text="{Binding Level}" FontWeight="SemiBold" Foreground="#34495E" FontSize="12"/>
                                                             </StackPanel>
 
-                                                            <StackPanel Orientation="Horizontal" Margin="0,0,20,5">
-                                                                <TextBlock Text="Diện tích: " Foreground="#7F8C8D" FontSize="12"/>
-                                                                <TextBlock Text="{Binding Area, StringFormat='{}{0:F2} m²'}" FontWeight="SemiBold" Foreground="#34495E" FontSize="12"/>
-                                                            </StackPanel>
-
-                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                                                <TextBlock Text="Chiều dày: " Foreground="#7F8C8D" FontSize="12"/>
-                                                                <TextBlock Text="{Binding Thickness, StringFormat='{}{0:F0} mm'}" FontWeight="SemiBold" Foreground="#34495E" FontSize="12"/>
-                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding DisplaySummary}" FontWeight="SemiBold"
+                                                                       Foreground="#34495E" FontSize="12" Margin="0,0,0,5"/>
                                                         </WrapPanel>
                                                     </Grid>
                                                 </Grid>
@@ -165,16 +158,16 @@
                                 <RowDefinition Height="35"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Text="Khoảng cách XG phụ:" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="1" Text="{Binding Joist1Spacing}" IsReadOnly="True" Padding="5,0" VerticalContentAlignment="Center" Margin="2" Background="#F8F9F9"/>
+                            <TextBlock Grid.Row="0" Text="{Binding Param1Label}" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" Text="{Binding Param1Value, Mode=OneWay}" IsReadOnly="True" Padding="5,0" VerticalContentAlignment="Center" Margin="2" Background="#F8F9F9"/>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
 
-                            <TextBlock Grid.Row="1" Text="Khoảng cách XG chính:" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" Text="{Binding Joist2Spacing}" IsReadOnly="True" Padding="5,0" VerticalContentAlignment="Center" Margin="2" Background="#F8F9F9"/>
+                            <TextBlock Grid.Row="1" Text="{Binding Param2Label}" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" Text="{Binding Param2Value, Mode=OneWay}" IsReadOnly="True" Padding="5,0" VerticalContentAlignment="Center" Margin="2" Background="#F8F9F9"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
 
-                            <TextBlock Grid.Row="2" Text="Khoảng cách cây chống:" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="2" Grid.Column="1" Text="{Binding SupportSpacing}" IsReadOnly="True" Padding="5,0" VerticalContentAlignment="Center" Margin="2" Background="#F8F9F9"/>
+                            <TextBlock Grid.Row="2" Text="{Binding Param3Label}" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" Text="{Binding Param3Value, Mode=OneWay}" IsReadOnly="True" Padding="5,0" VerticalContentAlignment="Center" Margin="2" Background="#F8F9F9"/>
                             <TextBlock Grid.Row="2" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
                         </Grid>
 
@@ -203,13 +196,17 @@
                                 <!-- Header cho bản vẽ -->
                                 <Border Grid.Row="0" Background="#EAEDED" Padding="8,5" CornerRadius="3,3,0,0" BorderBrush="#D5DBDB" BorderThickness="0,0,0,1">
                                     <Grid>
-                                        <TextBlock Text="MẶT BẰNG 2D DỰ ÁN" FontWeight="SemiBold" Foreground="#34495E" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="MẶT BẰNG / MÔ HÌNH 2D DỰ ÁN" FontWeight="SemiBold" Foreground="#34495E" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left"/>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                            <Button Content="👉 Chọn sàn từ mô hình" 
+                                            <CheckBox Content="Sàn" IsChecked="{Binding IsFilterSlabChecked}" Margin="0,0,5,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            <CheckBox Content="Móng" IsChecked="{Binding IsFilterFoundationChecked}" Margin="0,0,5,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            <CheckBox Content="Dầm" IsChecked="{Binding IsFilterBeamChecked}" Margin="0,0,5,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            <CheckBox Content="Cột" IsChecked="{Binding IsFilterColumnChecked}" Margin="0,0,10,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            <Button Content="Bấm chọn cấu kiện" 
                                                     Command="{Binding SelectFloorCommand}" 
                                                     Background="#3498DB" Foreground="White" 
                                                     BorderThickness="0" Padding="10,2" FontWeight="Bold" Cursor="Hand" Margin="0,0,5,0"/>
-                                            <Button Content="👉 Quét chọn nhiều ô sàn" 
+                                            <Button Content="Quét chọn nhiều cấu kiện" 
                                                     Command="{Binding SweepSelectFloorCommand}" 
                                                     Background="#3498DB" Foreground="White" 
                                                     BorderThickness="0" Padding="10,2" FontWeight="Bold" Cursor="Hand"/>

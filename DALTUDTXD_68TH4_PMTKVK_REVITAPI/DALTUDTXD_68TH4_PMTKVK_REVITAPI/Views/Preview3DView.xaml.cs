@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views
 {
@@ -14,6 +15,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views
         {
             if (this.IsVisible && Viewport != null)
             {
+                if (DataContext is Preview3DViewModel viewModel)
+                {
+                    viewModel.EnsureProjectModel();
+                }
+
                 // Force a layout update and zoom extents when becoming visible to fix blank rendering bugs
                 Viewport.UpdateLayout();
                 Viewport.ZoomExtents();

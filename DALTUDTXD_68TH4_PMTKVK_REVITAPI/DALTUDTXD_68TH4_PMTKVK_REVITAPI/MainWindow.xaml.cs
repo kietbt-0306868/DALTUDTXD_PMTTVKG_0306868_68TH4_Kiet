@@ -52,6 +52,72 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
             }
         }
 
+        /// <summary>
+        /// Auto-execute a specific action triggered by a Revit ribbon button.
+        /// Maps action name strings to the corresponding ICommand on the active ViewModel.
+        /// </summary>
+        public void ExecuteStartupAction(string actionName)
+        {
+            System.Windows.Input.ICommand cmd = null;
+
+            switch (actionName)
+            {
+                // Lựa Chọn (DuLieuView / SharedDataViewModel)
+                case "SelectComponent":
+                    cmd = SharedSharedDataViewModel.SelectComponentCommand;
+                    break;
+                case "SweepSelectComponent":
+                    cmd = SharedSharedDataViewModel.SweepSelectComponentCommand;
+                    break;
+
+                // Dữ Liệu (DuLieuView / SharedDataViewModel)
+                case "SelectGroundFloor":
+                    cmd = SharedSharedDataViewModel.SelectGroundFloorCommand;
+                    break;
+                case "UpdateResults":
+                    cmd = SharedSharedDataViewModel.UpdateResultsCommand;
+                    break;
+                case "RunAnalysis":
+                    cmd = SharedSharedDataViewModel.RunAnalysisCommand;
+                    break;
+
+                // Tính Toán (TinhToanView / TinhToanViewModel)
+                case "Recalculate":
+                    if (TinhToanTab.DataContext is TinhToanViewModel tinhToanVm)
+                        cmd = tinhToanVm.RecalculateCommand;
+                    break;
+
+                // Xuất & Mô Hình (KetQuaView / KetQuaViewModel)
+                case "CreateRevitModel":
+                    if (KetQuaTab.DataContext is KetQuaViewModel ketQuaVm1)
+                        cmd = ketQuaVm1.CreateRevitModelCommand;
+                    break;
+                case "CalculateAllFloors":
+                    if (KetQuaTab.DataContext is KetQuaViewModel ketQuaVm2)
+                        cmd = ketQuaVm2.CalculateAllFloorsCommand;
+                    break;
+                case "ExportExcel":
+                    if (KetQuaTab.DataContext is KetQuaViewModel ketQuaVm3)
+                        cmd = ketQuaVm3.ExportExcelCommand;
+                    break;
+
+                // Cài Đặt (ThongSoView / ThongSoViewModel)
+                case "SaveSettings":
+                    if (ThongSoTab.DataContext is ThongSoViewModel thongSoVm1)
+                        cmd = thongSoVm1.SaveSettingsCommand;
+                    break;
+                case "ResetSettings":
+                    if (ThongSoTab.DataContext is ThongSoViewModel thongSoVm2)
+                        cmd = thongSoVm2.ResetSettingsCommand;
+                    break;
+            }
+
+            if (cmd != null && cmd.CanExecute(null))
+            {
+                cmd.Execute(null);
+            }
+        }
+
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);

@@ -8,6 +8,46 @@
              mc:Ignorable="d" 
              d:DesignHeight="550" d:DesignWidth="800"
              d:DataContext="{d:DesignInstance Type=vm:TinhToanViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="CalcTextPrimary" Color="#1E293B"/>
+        <SolidColorBrush x:Key="CalcTextSecondary" Color="#64748B"/>
+        <SolidColorBrush x:Key="CalcAccent" Color="#0F766E"/>
+        <SolidColorBrush x:Key="CalcFormula" Color="#1D4ED8"/>
+        <SolidColorBrush x:Key="CalcBorder" Color="#CBD5E1"/>
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource CalcTextPrimary}"/>
+        </Style>
+        <Style x:Key="CalcSectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource CalcTextPrimary}"/>
+        </Style>
+        <Style x:Key="CalcLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource CalcTextSecondary}"/>
+        </Style>
+        <Style x:Key="CalcValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource CalcTextPrimary}"/>
+        </Style>
+        <Style x:Key="CalcFormulaStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontStyle" Value="Italic"/>
+            <Setter Property="Foreground" Value="{StaticResource CalcFormula}"/>
+        </Style>
+        <Style x:Key="CalcButtonStyle" TargetType="Button">
+            <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <Grid>
             <Grid.RowDefinitions>
@@ -24,9 +64,15 @@
             
             <!-- Toolbar Tính Toán -->
             <Grid Grid.Row="1" Background="#F8F9F9">
-                <StackPanel Orientation="Horizontal">
-                    <Button Content=" Chạy tính toán lại"        Command="{Binding RecalculateCommand}"        Margin="5" Padding="12,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
-                </StackPanel>
+                <Grid Margin="5,6">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="Chạy tính toán lại" Command="{Binding RecalculateCommand}"
+                            Style="{StaticResource CalcButtonStyle}" Background="White" BorderBrush="#CBD5E1" Foreground="#1E293B" Margin="0,0,8,0"/>
+                    <Button Grid.Column="1" Content="Tự động thiết kế đạt chuẩn" Command="{Binding AutoFixPropsCommand}"
+                            Style="{StaticResource CalcButtonStyle}" Background="#0F766E" BorderBrush="#0F766E" Foreground="White" Margin="0,0,12,0"/>
+                    <TextBlock Grid.Column="2" Text="{Binding AutoDesignStatus}" Foreground="{Binding AutoDesignStatusColor}"
+                               FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </Grid>
             </Grid>
 
             <!-- Vùng Hiển Thị Chính -->
@@ -39,6 +85,8 @@
                 <!-- Cột Tính Toán -->
                 <Grid Grid.Column="0" Margin="0,0,5,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
@@ -57,13 +105,50 @@
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding SelectedFloorInfo}" FontSize="13" FontWeight="Bold" Foreground="#2C3E50" Margin="0,0,0,5"/>
                                 <TextBlock Text="{Binding SystemSafeTitle, TargetNullValue='HỆ THỐNG ĐẠT YÊU CẦU AN TOÀN KỸ THUẬT'}" FontSize="12" FontWeight="Bold" Foreground="{Binding IsSystemSafeTextColor, TargetNullValue='#065F46'}"/>
-                                <TextBlock Text="{Binding SystemSafeDescription, TargetNullValue='Tất cả các cấu kiện (ván mặt, xà gồ phụ, xà gồ chính, cây chống) đều thoả mãn điều kiện cường độ và độ võng.'}" FontSize="11" Foreground="{Binding IsSystemSafeTextColor, TargetNullValue='#065F46'}" Margin="0,2,0,0"/>
+                                <TextBlock Text="{Binding SystemSafeDescription, TargetNullValue='Tất cả các cấu kiện (ván mặt, xà gồ phụ, xà gồ chính, cây chống) đều thoả mãn điều kiện cường độ và độ võng.'}" FontSize="11" Foreground="{Binding IsSystemSafeTextColor, TargetNullValue='#065F46'}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Grid>
                     </Border>
 
+                    <Border Grid.Row="1" Visibility="{Binding ColumnVerificationVisibility}" Margin="0,0,0,10" CornerRadius="3"
+                            Padding="10" Background="#EFF6FF" BorderBrush="#93C5FD" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="CƠ SỞ KIỂM CHỨNG TÍNH TOÁN CỘT" FontWeight="Bold" FontSize="12" Foreground="#1E3A8A" Margin="0,0,0,5"/>
+                            <TextBlock Text="{Binding ColumnPressureVerification}" TextWrapping="Wrap" FontSize="10.5" Foreground="#1E40AF" Margin="0,0,0,3"/>
+                            <TextBlock Text="{Binding ColumnSpanVerification}" TextWrapping="Wrap" FontSize="10.5" Foreground="#1E40AF" Margin="0,0,0,3"/>
+                            <TextBlock Text="{Binding ColumnConstructionVerification}" TextWrapping="Wrap" FontSize="10.5" Foreground="#1E40AF"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="1" Visibility="{Binding BeamVerificationVisibility}" Margin="0,0,0,10" CornerRadius="3"
+                            Padding="10" Background="#F0FDF4" BorderBrush="#86EFAC" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="CƠ SỞ KIỂM CHỨNG CỐP PHA DẦM" FontWeight="Bold" FontSize="12" Foreground="#14532D" Margin="0,0,0,5"/>
+                            <TextBlock Text="{Binding BeamLoadVerification}" TextWrapping="Wrap" FontSize="10.5" Foreground="#166534" Margin="0,0,0,3"/>
+                            <TextBlock Text="{Binding BeamLoadPathVerification}" TextWrapping="Wrap" FontSize="10.5" Foreground="#166534" Margin="0,0,0,3"/>
+                            <TextBlock Text="{Binding BeamConstructionVerification}" TextWrapping="Wrap" FontSize="10.5" Foreground="#166534"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="2" Visibility="{Binding AutoDesignDiffVisibility}" Margin="0,0,0,10"
+                            CornerRadius="3" Padding="10" Background="#F8FAFC" BorderBrush="#94A3B8" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="THAY ĐỔI THIẾT KẾ THEO CẤU KIỆN" FontWeight="Bold" FontSize="12"
+                                       Foreground="#0F172A" Margin="0,0,0,5"/>
+                            <ScrollViewer MaxHeight="105" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding AutoDesignDiffItems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="#334155" Margin="0,2"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Chi tiết kiểm tra từng cấu kiện -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,5,0">
+                    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,5,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -73,13 +158,14 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <!-- CARD 1: VÁN MẶT -->
-                            <Border Grid.Row="0" Background="White" Margin="0,0,0,10" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
+                            <Border Grid.Row="0" Visibility="Collapsed" Background="White" Margin="0,0,0,10" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
                                 <StackPanel>
                                     <DockPanel Margin="0,0,0,10">
-                                        <TextBlock Text="VÁN MẶT (PLYWOOD)" FontWeight="Bold" FontSize="13" Foreground="#2C3E50"/>
+                                        <TextBlock Text="{Binding Card1Title}" Style="{StaticResource CalcSectionTitleStyle}"/>
                                         <Border Background="{Binding PlywoodStatusColor, TargetNullValue='#D1FAE5'}" CornerRadius="2" Padding="6,2" HorizontalAlignment="Right">
                                             <TextBlock Text="{Binding PlywoodStatusText, TargetNullValue='ĐẠT'}" Foreground="{Binding PlywoodStatusTextColor, TargetNullValue='#065F46'}" FontSize="10" FontWeight="Bold"/>
                                         </Border>
@@ -124,10 +210,10 @@
                             </Border>
 
                             <!-- CARD 2: XÀ GỒ PHỤ (LỚP 1) -->
-                            <Border Grid.Row="1" Background="White" Margin="0,0,0,10" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
+                            <Border Grid.Row="1" Visibility="Collapsed" Background="White" Margin="0,0,0,10" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
                                 <StackPanel>
                                     <DockPanel Margin="0,0,0,10">
-                                        <TextBlock Text="XÀ GỒ LỚP 1 (THANH PHỤ)" FontWeight="Bold" FontSize="13" Foreground="#2C3E50"/>
+                                        <TextBlock Text="{Binding Card2Title}" Style="{StaticResource CalcSectionTitleStyle}"/>
                                         <Border Background="{Binding Joist1StatusColor, TargetNullValue='#D1FAE5'}" CornerRadius="2" Padding="6,2" HorizontalAlignment="Right">
                                             <TextBlock Text="{Binding Joist1StatusText, TargetNullValue='ĐẠT'}" Foreground="{Binding Joist1StatusTextColor, TargetNullValue='#065F46'}" FontSize="10" FontWeight="Bold"/>
                                         </Border>
@@ -189,10 +275,10 @@
                             </Border>
 
                             <!-- CARD 3: XÀ GỒ CHÍNH (LỚP 2) -->
-                            <Border Grid.Row="2" Background="White" Margin="0,0,0,10" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
+                            <Border Grid.Row="2" Visibility="Collapsed" Background="White" Margin="0,0,0,10" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
                                 <StackPanel>
                                     <DockPanel Margin="0,0,0,10">
-                                        <TextBlock Text="XÀ GỒ LỚP 2 (THANH CHÍNH)" FontWeight="Bold" FontSize="13" Foreground="#2C3E50"/>
+                                        <TextBlock Text="{Binding Card3Title}" Style="{StaticResource CalcSectionTitleStyle}"/>
                                         <Border Background="{Binding Joist2StatusColor, TargetNullValue='#FEE2E2'}" CornerRadius="2" Padding="6,2" HorizontalAlignment="Right">
                                             <TextBlock Text="{Binding Joist2StatusText, TargetNullValue='KHÔNG ĐẠT'}" Foreground="{Binding Joist2StatusTextColor, TargetNullValue='#991B1B'}" FontSize="10" FontWeight="Bold"/>
                                         </Border>
@@ -254,10 +340,10 @@
                             </Border>
 
                             <!-- CARD 4: HỆ CÂY CHỐNG -->
-                            <Border Grid.Row="3" Background="White" Margin="0,0,0,5" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
+                            <Border Grid.Row="3" Visibility="Collapsed" Background="White" Margin="0,0,0,5" CornerRadius="3" Padding="15" BorderBrush="#ABB2B9" BorderThickness="1">
                                 <StackPanel>
                                     <DockPanel Margin="0,0,0,10">
-                                        <TextBlock Text="HỆ CÂY CHỐNG ĐỨNG" FontWeight="Bold" FontSize="13" Foreground="#2C3E50" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Card4Title}" Style="{StaticResource CalcSectionTitleStyle}" VerticalAlignment="Center"/>
                                         <Border Background="{Binding SupportStatusColor, TargetNullValue='#D1FAE5'}" CornerRadius="2" Padding="6,2" HorizontalAlignment="Right" DockPanel.Dock="Right" Margin="5,0,0,0">
                                             <TextBlock Text="{Binding SupportStatusText, TargetNullValue='ĐẠT'}" Foreground="{Binding SupportStatusTextColor, TargetNullValue='#065F46'}" FontSize="10" FontWeight="Bold"/>
                                         </Border>
@@ -278,7 +364,7 @@
                                     <Separator Background="#EEE" Margin="0,5,0,10"/>
                                     
                                     <!-- Lực dọc trục tác dụng -->
-                                    <TextBlock Text="Lực dọc trục lên đầu cột (P_tt)" FontSize="11" Foreground="#7F8C8D"/>
+                                    <TextBlock Text="{Binding Card4LoadLabel}" FontSize="11" Foreground="#7F8C8D"/>
                                     <Grid Margin="0,2,0,8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -300,9 +386,78 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Hệ số uốn dọc φ:" FontSize="11" Foreground="#7F8C8D"/>
+                                        <TextBlock Text="{Binding Card4FactorLabel}" FontSize="11" Foreground="#7F8C8D"/>
                                         <TextBlock Grid.Column="1" Text="{Binding SupportSlendernessFactor, TargetNullValue='0.78'}" FontWeight="SemiBold" FontSize="11" Foreground="#2C3E50"/>
                                     </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Row="4" Background="Transparent" Margin="0,0,0,5">
+                                <StackPanel>
+                                    <TextBlock Text="CHI TIẾT TÍNH TOÁN VÀ KIỂM TRA" Style="{StaticResource CalcSectionTitleStyle}"/>
+                                    <TextBlock Text="{Binding DetailedCheckSummary}" Margin="0,3,0,10"
+                                               Style="{StaticResource CalcLabelStyle}" TextWrapping="Wrap"/>
+                                    <ItemsControl ItemsSource="{Binding DetailedChecks}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="White" BorderBrush="{Binding GroupAccent}" BorderThickness="3,1,1,1"
+                                                        CornerRadius="3" Padding="15" Margin="0,0,0,10">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Row="0" Grid.Column="0">
+                                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="#1E293B" TextWrapping="Wrap">
+                                                                <Run Text="{Binding Group}"/><Run Text=" · "/><Run Text="{Binding Component}"/>
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                        <Border Grid.Row="0" Grid.Column="1" Background="{Binding StatusBackground}"
+                                                                CornerRadius="2" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Top">
+                                                            <TextBlock Text="{Binding Status}" Foreground="{Binding StatusForeground}"
+                                                                       FontSize="10" FontWeight="Bold"/>
+                                                        </Border>
+                                                        <Separator Grid.Row="1" Grid.ColumnSpan="2" Background="#EEEEEE" Margin="0,8,0,9"/>
+                                                        <Grid Grid.Row="2" Grid.ColumnSpan="2">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Check}" Style="{StaticResource CalcLabelStyle}" TextWrapping="Wrap"/>
+                                                                <TextBlock Text="{Binding Formula}"
+                                                                   Style="{StaticResource CalcFormulaStyle}"
+                                                                   TextWrapping="Wrap" Margin="0,3,12,4"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="1" Text="Giới hạn 100%" FontSize="10"
+                                                                       Foreground="#64748B" VerticalAlignment="Bottom" Margin="8,0,0,4"/>
+                                                        </Grid>
+                                                        <Grid Grid.Row="3" Grid.ColumnSpan="2" Margin="0,0,0,7">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" FontSize="11" Foreground="#1E293B"><Run Text="Tính toán: "/><Run Text="{Binding Demand}" FontWeight="SemiBold"/></TextBlock>
+                                                            <TextBlock Grid.Column="1" FontSize="11" Foreground="#1E293B"><Run Text="Cho phép: "/><Run Text="{Binding Allowable}" FontWeight="SemiBold"/></TextBlock>
+                                                            <TextBlock Grid.Column="2" Text="{Binding Utilization, StringFormat={}{0:F1}%}"
+                                                                       FontSize="11" FontWeight="Bold" Foreground="#1D4ED8"/>
+                                                        </Grid>
+                                                        <ProgressBar Grid.Row="4" Grid.ColumnSpan="2" Minimum="0" Maximum="100"
+                                                                     Value="{Binding Utilization}" Height="6"
+                                                                     Background="#E2E8F0" Foreground="#2563EB"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -323,11 +478,16 @@
                             <Grid>
                                 <TextBlock Text="MẶT BẰNG 2D DỰ ÁN" FontWeight="SemiBold" Foreground="#34495E" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left"/>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button Content="👉 Chọn sàn từ mô hình" 
+                                    <TextBlock Text="Phạm vi tính:" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#475569" FontWeight="SemiBold"/>
+                                    <CheckBox Content="Sàn" IsChecked="{Binding IsFilterSlabChecked}" Margin="0,0,5,0" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Đưa hệ ván khuôn sàn vào tính toán và hiển thị 2D"/>
+                                    <CheckBox Content="Móng" IsChecked="{Binding IsFilterFoundationChecked}" Margin="0,0,5,0" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Đưa hệ ván khuôn móng/nền vào tính toán và hiển thị 2D"/>
+                                    <CheckBox Content="Dầm" IsChecked="{Binding IsFilterBeamChecked}" Margin="0,0,5,0" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Đưa hệ ván khuôn dầm vào tính toán và hiển thị 2D"/>
+                                    <CheckBox Content="Cột" IsChecked="{Binding IsFilterColumnChecked}" Margin="0,0,10,0" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Đưa hệ ván khuôn cột vào tính toán và hiển thị 2D"/>
+                                    <Button Content="Bấm chọn cấu kiện" 
                                             Command="{Binding SelectFloorCommand}" 
                                             Background="#3498DB" Foreground="White" 
                                             BorderThickness="0" Padding="10,2" FontWeight="Bold" Cursor="Hand" Margin="0,0,5,0"/>
-                                    <Button Content="👉 Quét chọn nhiều ô sàn" 
+                                    <Button Content="Quét chọn nhiều cấu kiện" 
                                             Command="{Binding SweepSelectFloorCommand}" 
                                             Background="#3498DB" Foreground="White" 
                                             BorderThickness="0" Padding="10,2" FontWeight="Bold" Cursor="Hand"/>

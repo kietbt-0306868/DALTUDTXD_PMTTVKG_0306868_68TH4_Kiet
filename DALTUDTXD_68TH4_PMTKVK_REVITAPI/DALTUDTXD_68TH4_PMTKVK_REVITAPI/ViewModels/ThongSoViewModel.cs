@@ -66,10 +66,28 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             set { _SharedDataViewModel.ConcreteWeight = value; }
         }
 
+        public double SteelWeight
+        {
+            get => _SharedDataViewModel.SteelWeight;
+            set { _SharedDataViewModel.SteelWeight = value; }
+        }
+
         public double ConstructionLiveLoad
         {
             get => _SharedDataViewModel.ConstructionLiveLoad;
             set { _SharedDataViewModel.ConstructionLiveLoad = value; }
+        }
+
+        public double PouringImpactLoad
+        {
+            get => _SharedDataViewModel.PouringImpactLoad;
+            set { _SharedDataViewModel.PouringImpactLoad = value; }
+        }
+
+        public double VibrationLoad
+        {
+            get => _SharedDataViewModel.VibrationLoad;
+            set { _SharedDataViewModel.VibrationLoad = value; }
         }
 
         public double DeadLoadSafetyFactor

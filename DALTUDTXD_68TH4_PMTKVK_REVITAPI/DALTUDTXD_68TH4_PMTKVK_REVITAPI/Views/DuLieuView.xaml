@@ -11,34 +11,22 @@
     <Grid>
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="25"/>
-                <RowDefinition Height="60"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="30"/>
             </Grid.RowDefinitions>
 
             <!-- Menu Hệ Thống -->
-            <Menu Grid.Row="0" Background="#F3F3F3" Foreground="Black">
+            <Menu Grid.Row="0" Background="#F3F3F3" Foreground="Black" Visibility="Collapsed">
                 <MenuItem Header=""/>
             </Menu>
 
-        <!-- Toolbar Tính Toán -->
-        <Grid Grid.Row="1" Background="#F8F9F9">
-            <StackPanel Orientation="Horizontal">
-                <Button Content="Chọn sàn từ Revit"     Command="{Binding SelectSlabCommand}" Margin="5" Padding="16,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
-                <Button Content="Quét chọn nhiều ô sàn" Command="{Binding SweepSelectSlabCommand}" Margin="5" Padding="16,5" Background="#3498DB" Foreground="White" BorderBrush="White" FontWeight="Bold"/>
-                <Button Content="Cập nhật kết quả"      Command="{Binding UpdateResultsCommand}" Margin="5" Padding="16,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
-                <Button Content="Chạy phân tích"        Command="{Binding RunAnalysisCommand}" Margin="5" Padding="16,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- Vùng Hiển Thị Chính -->
-        <Grid Grid.Row="2" Margin="15,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+            <!-- Vùng Hiển Thị Chính -->
+            <Grid Grid.Row="0" Margin="15,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
             <!-- Bảng Kết Quả và Danh sách sàn -->
             <ScrollViewer Grid.Column="0" Margin="0,0,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -143,7 +131,7 @@
         </Grid>
 
         <!-- Thanh Trạng Thái -->
-        <StatusBar Grid.Row="3" Background="#F8F9F9" BorderBrush="#D5DBDB" BorderThickness="0,1,0,0">
+        <StatusBar Grid.Row="1" Background="#F8F9F9" BorderBrush="#D5DBDB" BorderThickness="0,1,0,0">
             <StatusBarItem Content="Ván khuôn sàn"/>
             <Separator/>
             <StatusBarItem Content="{Binding RevitVersionStatus}"/>

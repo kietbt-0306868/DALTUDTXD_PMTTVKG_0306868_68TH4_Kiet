@@ -182,6 +182,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             double suppSp = SupportSpacing > 0 ? SupportSpacing : 1000.0;
             double concreteWt = ConcreteWeight > 0 ? ConcreteWeight : 25.0;
 
+            bool isFloorSelected = SelectedSlabArea > 0;
+
             var results = new List<KetQuaHienThi>();
 
             // Khởi tạo các mô hình cấu kiện
@@ -205,15 +207,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             
             var kqVanMatStress = new Models.KetQuaTinhToan("Ván mặt", "Kiểm tra cường độ uốn", Models.LoaiKiemTra.CuongDoUon, "σ = M/W ≤ Ru", plyStress, strength, "MPa");
             
-            results.Add(new KetQuaHienThi
-            {
-                NoiDungKiemTra = "Kiểm tra cường độ ván khuôn (σ ≤ Ru)",
-                GiaTriThucTe = $"{kqVanMatStress.GiaTriThucTe:F2} MPa",
-                GiaTriChoPhep = $"{kqVanMatStress.GiaTriChoPhep:F2} MPa",
-                KetLuan = kqVanMatStress.KetLuan,
-                MauNenTrangThai = kqVanMatStress.IsThoaman ? "#D1FAE5" : "#FEE2E2",
-                MauChuTrangThai = kqVanMatStress.IsThoaman ? "#065F46" : "#991B1B"
-            });
+            results.Add(Models.FormworkCalculationService.BuildReportItem("", "Kiểm tra cường độ ván khuôn (σ ≤ Ru)", kqVanMatStress, isFloorSelected));
 
             // 2. Kiểm tra độ võng ván khuôn
             double q1_tc = q_tc * 1.0; // N/mm
@@ -223,15 +217,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
             var kqVanMatDef = new Models.KetQuaTinhToan("Ván mặt", "Kiểm tra độ võng", Models.LoaiKiemTra.DoVong, "f = 5qL^4/384EI ≤ [f]", plyDef, plyDefLimit, "mm");
 
-            results.Add(new KetQuaHienThi
-            {
-                NoiDungKiemTra = "Kiểm tra độ võng ván khuôn (f_tt ≤ [f])",
-                GiaTriThucTe = $"{kqVanMatDef.GiaTriThucTe:F2} mm",
-                GiaTriChoPhep = $"{kqVanMatDef.GiaTriChoPhep:F2} mm",
-                KetLuan = kqVanMatDef.KetLuan,
-                MauNenTrangThai = kqVanMatDef.IsThoaman ? "#D1FAE5" : "#FEE2E2",
-                MauChuTrangThai = kqVanMatDef.IsThoaman ? "#065F46" : "#991B1B"
-            });
+            results.Add(Models.FormworkCalculationService.BuildReportItem("", "Kiểm tra độ võng ván khuôn (f_tt ≤ [f])", kqVanMatDef, isFloorSelected));
 
             // 3. Kiểm tra cường độ xà gồ phụ
             double q2_tt = q_tt * (joist1Sp / 1000.0); // N/mm
@@ -241,15 +227,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             
             var kqXaGoPhuStress = new Models.KetQuaTinhToan("Xà gồ phụ", "Kiểm tra cường độ uốn", Models.LoaiKiemTra.CuongDoUon, "σ = M/W ≤ Ru", j1Stress, j1Limit, "MPa");
 
-            results.Add(new KetQuaHienThi
-            {
-                NoiDungKiemTra = "Kiểm tra cường độ xà gồ phụ (Thanh phụ)",
-                GiaTriThucTe = $"{kqXaGoPhuStress.GiaTriThucTe:F2} MPa",
-                GiaTriChoPhep = $"{kqXaGoPhuStress.GiaTriChoPhep:F2} MPa",
-                KetLuan = kqXaGoPhuStress.KetLuan,
-                MauNenTrangThai = kqXaGoPhuStress.IsThoaman ? "#D1FAE5" : "#FEE2E2",
-                MauChuTrangThai = kqXaGoPhuStress.IsThoaman ? "#065F46" : "#991B1B"
-            });
+            results.Add(Models.FormworkCalculationService.BuildReportItem("", "Kiểm tra cường độ xà gồ phụ (Thanh phụ)", kqXaGoPhuStress, isFloorSelected));
 
             // 4. Kiểm tra độ võng xà gồ chính
             double q3_tc = q_tc * (joist2Sp / 1000.0); // N/mm
@@ -259,15 +237,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             
             var kqXaGoChinhDef = new Models.KetQuaTinhToan("Xà gồ chính", "Kiểm tra độ võng", Models.LoaiKiemTra.DoVong, "f = 5qL^4/384EI ≤ [f]", j2Def, j2DefLimit, "mm");
 
-            results.Add(new KetQuaHienThi
-            {
-                NoiDungKiemTra = "Kiểm tra độ võng xà gồ chính (Thanh chính)",
-                GiaTriThucTe = $"{kqXaGoChinhDef.GiaTriThucTe:F2} mm",
-                GiaTriChoPhep = $"{kqXaGoChinhDef.GiaTriChoPhep:F2} mm",
-                KetLuan = kqXaGoChinhDef.KetLuan,
-                MauNenTrangThai = kqXaGoChinhDef.IsThoaman ? "#D1FAE5" : "#FEE2E2",
-                MauChuTrangThai = kqXaGoChinhDef.IsThoaman ? "#065F46" : "#991B1B"
-            });
+            results.Add(Models.FormworkCalculationService.BuildReportItem("", "Kiểm tra độ võng xà gồ chính (Thanh chính)", kqXaGoChinhDef, isFloorSelected));
 
             // 5. Kiểm tra sức chịu tải cây chống
             double N_tt = q_tt * (joist2Sp / 1000.0) * (suppSp / 1000.0); // kN
@@ -278,15 +248,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
             var kqCayChong = new Models.KetQuaTinhToan("Cây chống", "Kiểm tra sức chịu tải", Models.LoaiKiemTra.ChiuLucDoc, "N ≤ [P]", N_tt, shoreLimit, "kN");
 
-            results.Add(new KetQuaHienThi
-            {
-                NoiDungKiemTra = "Kiểm tra sức chịu tải cây chống đứng (P_tt ≤ P_cp)",
-                GiaTriThucTe = $"{kqCayChong.GiaTriThucTe:F2} kN",
-                GiaTriChoPhep = $"{kqCayChong.GiaTriChoPhep:F2} kN",
-                KetLuan = kqCayChong.KetLuan,
-                MauNenTrangThai = kqCayChong.IsThoaman ? "#D1FAE5" : "#FEE2E2",
-                MauChuTrangThai = kqCayChong.IsThoaman ? "#065F46" : "#991B1B"
-            });
+            results.Add(Models.FormworkCalculationService.BuildReportItem("", "Kiểm tra sức chịu tải cây chống đứng (P_tt ≤ P_cp)", kqCayChong, isFloorSelected));
 
             CheckResults = results;
         }

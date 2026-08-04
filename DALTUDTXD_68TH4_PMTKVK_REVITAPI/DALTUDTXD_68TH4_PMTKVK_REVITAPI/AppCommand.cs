@@ -11,6 +11,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
     public abstract class AppCommandBase : IExternalCommand
     {
         protected abstract string TargetTab { get; }
+        protected virtual string TargetAction => null;
 
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -40,6 +41,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                 var sharedViewModel = new SharedDataViewModel(dialogService, anSoCuaSoDelegate);
                 sharedViewModel.InitializeRevitContext(doc, uiDoc, null);
                 sharedViewModel.StartupTab = TargetTab;
+                sharedViewModel.StartupAction = TargetAction;
 
                 while (true)
                 {
@@ -70,6 +72,13 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                         sharedViewModel.StartupTab = null;
                     }
 
+                    // Auto-execute the startup action if specified by the ribbon button
+                    if (!string.IsNullOrEmpty(sharedViewModel.StartupAction))
+                    {
+                        mainWindow.ExecuteStartupAction(sharedViewModel.StartupAction);
+                        sharedViewModel.StartupAction = null;
+                    }
+
                     try
                     {
                         mainWindow.ShowDialog();
@@ -81,7 +90,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                         sharedViewModel.DisposePreviewControl();
                     }
 
-                    if (sharedViewModel.IsSelectingSlab || sharedViewModel.IsSweepSelectingSlab)
+                    if (sharedViewModel.IsSelectingSlab || sharedViewModel.IsSweepSelectingSlab ||
+                        sharedViewModel.IsSelectingBeam || sharedViewModel.IsSweepSelectingBeam ||
+                        sharedViewModel.IsSelectingColumn || sharedViewModel.IsSweepSelectingColumn ||
+                        sharedViewModel.IsSelectingComponent || sharedViewModel.IsSweepSelectingComponent)
                     {
                         HandleSelection(uiDoc, sharedViewModel);
                     }
@@ -128,16 +140,54 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
 
         private void HandleSelection(UIDocument uiDoc, SharedDataViewModel sharedViewModel)
         {
-            if (sharedViewModel.IsSelectingSlab)
+            Autodesk.Revit.UI.Selection.ISelectionFilter filter = new FloorSelectionFilter();
+            string title = "chọn cấu kiện";
+            bool isSweep = false;
+            
+            if (sharedViewModel.IsSelectingComponent || sharedViewModel.IsSweepSelectingComponent)
             {
-                string title = "chọn sàn";
+                filter = new MultiComponentSelectionFilter(
+                    sharedViewModel.IsFilterBeamChecked,
+                    sharedViewModel.IsFilterSlabChecked,
+                    sharedViewModel.IsFilterColumnChecked,
+                    sharedViewModel.IsFilterFoundationChecked);
+                title = "chọn cấu kiện";
+                isSweep = sharedViewModel.IsSweepSelectingComponent;
+            }
+            else if (sharedViewModel.IsSelectingSlab || sharedViewModel.IsSweepSelectingSlab)
+            {
+                filter = new FloorSelectionFilter();
+                title = "chọn sàn";
+                isSweep = sharedViewModel.IsSweepSelectingSlab;
+            }
+            else if (sharedViewModel.IsSelectingFoundation || sharedViewModel.IsSweepSelectingFoundation)
+            {
+                filter = new FoundationSelectionFilter();
+                title = "chọn móng";
+                isSweep = sharedViewModel.IsSweepSelectingFoundation;
+            }
+            else if (sharedViewModel.IsSelectingBeam || sharedViewModel.IsSweepSelectingBeam)
+            {
+                filter = new BeamSelectionFilter();
+                title = "chọn dầm";
+                isSweep = sharedViewModel.IsSweepSelectingBeam;
+            }
+            else if (sharedViewModel.IsSelectingColumn || sharedViewModel.IsSweepSelectingColumn)
+            {
+                filter = new ColumnSelectionFilter();
+                title = "chọn cột";
+                isSweep = sharedViewModel.IsSweepSelectingColumn;
+            }
+
+            if (!isSweep)
+            {
                 System.Collections.Generic.IList<Reference> references = new System.Collections.Generic.List<Reference>();
                 try
                 {
                     references = uiDoc.Selection.PickObjects(
                         Autodesk.Revit.UI.Selection.ObjectType.Element,
-                        new FloorSelectionFilter(),
-                        "Quét vùng chuột hoặc giữ Ctrl để chọn nhiều sàn. NHẤN NÚT FINISH Ở GÓC TRÊN CÙNG BÊN TRÁI SAU KHI XONG!");
+                        filter,
+                        $"Quét vùng chuột hoặc giữ Ctrl để chọn nhiều {title}. NHẤN NÚT FINISH Ở GÓC TRÊN CÙNG BÊN TRÁI SAU KHI XONG!");
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
                 catch (Exception ex)
@@ -147,7 +197,90 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
 
                 if (references != null && references.Count > 0)
                 {
-                    sharedViewModel.ProcessSelectedSlab(references);
+                    if (sharedViewModel.IsSelectingComponent)
+                    {
+                        var doc = uiDoc.Document;
+                        var slabRefs = new System.Collections.Generic.List<Reference>();
+                        var foundationRefs = new System.Collections.Generic.List<Reference>();
+                        var beamRefs = new System.Collections.Generic.List<Reference>();
+                        var columnRefs = new System.Collections.Generic.List<Reference>();
+
+                        foreach (var r in references)
+                        {
+                            var elem = doc.GetElement(r);
+                            if (elem == null || elem.Category == null) continue;
+                            BuiltInCategory cat = elem.Category.BuiltInCategory;
+                            
+                            if (cat == BuiltInCategory.OST_StructuralFoundation) 
+                                foundationRefs.Add(r);
+                            else if (cat == BuiltInCategory.OST_Floors)
+                            {
+                                bool isFoundationSlab = false;
+                                if (elem is Floor floor && doc.GetElement(floor.GetTypeId()) as FloorType is FloorType floorType && floorType.IsFoundationSlab)
+                                {
+                                    isFoundationSlab = true;
+                                }
+
+                                if (isFoundationSlab) foundationRefs.Add(r);
+                                else slabRefs.Add(r);
+                            }
+                            else if (cat == BuiltInCategory.OST_StructuralFraming) beamRefs.Add(r);
+                            else if (cat == BuiltInCategory.OST_StructuralColumns) columnRefs.Add(r);
+                        }
+
+                        bool appendCategory = false;
+                        if (foundationRefs.Count > 0) { sharedViewModel.ProcessSelectedSlab(foundationRefs, showDialog: false, isFoundation: true, appendSelection: appendCategory); appendCategory = true; }
+                        if (slabRefs.Count > 0) { sharedViewModel.ProcessSelectedSlab(slabRefs, showDialog: false, isFoundation: false, appendSelection: appendCategory); appendCategory = true; }
+                        if (beamRefs.Count > 0) { sharedViewModel.ProcessSelectedBeam(beamRefs, appendCategory); appendCategory = true; }
+                        if (columnRefs.Count > 0) sharedViewModel.ProcessSelectedColumn(columnRefs, appendCategory);
+                        sharedViewModel.SetSelectedComponentComposition(
+                            slabRefs.Count, foundationRefs.Count, beamRefs.Count, columnRefs.Count);
+
+                        if (slabRefs.Count > 0 || foundationRefs.Count > 0 || beamRefs.Count > 0 || columnRefs.Count > 0)
+                        {
+                            var parts = new System.Collections.Generic.List<string>();
+                            string details = "Đã quét chọn thành công các cấu kiện từ Revit:\n\n";
+
+                            if (foundationRefs.Count > 0)
+                            {
+                                parts.Add($"{foundationRefs.Count} móng");
+                                details += $"• Móng: {foundationRefs.Count} cấu kiện (Diện tích: {sharedViewModel.SelectedSlabArea:F2} m²)\n";
+                            }
+                            if (slabRefs.Count > 0)
+                            {
+                                parts.Add($"{slabRefs.Count} sàn");
+                                details += $"• Sàn: {slabRefs.Count} cấu kiện (Diện tích: {sharedViewModel.SelectedSlabArea:F2} m²)\n";
+                            }
+                            if (beamRefs.Count > 0)
+                            {
+                                parts.Add($"{beamRefs.Count} dầm");
+                                details += $"• Dầm: {beamRefs.Count} cấu kiện (Tiết diện: {sharedViewModel.BeamWidth:F0}x{sharedViewModel.BeamDepth:F0} mm)\n";
+                            }
+                            if (columnRefs.Count > 0)
+                            {
+                                parts.Add($"{columnRefs.Count} cột");
+                                details += $"• Cột: {columnRefs.Count} cấu kiện (Tiết diện: {sharedViewModel.ColumnWidth:F0}x{sharedViewModel.ColumnDepth:F0} mm, H={sharedViewModel.ColumnHeight:F0} mm)\n";
+                            }
+
+                            details += "\n- Tự động đồng bộ và tính toán lại các thông số ván khuôn tối ưu.";
+                            sharedViewModel.RevitVersionStatus = $"Đã chọn: {string.Join(", ", parts)}";
+                            System.Windows.MessageBox.Show(details, "Revit API Integration", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                        }
+                        
+                        // Update active component type based on what was selected so the UI parameter tab aligns with the results
+                        if (columnRefs.Count > 0)
+                            sharedViewModel.CurrentComponentType = DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models.StructuralComponentType.Column;
+                        else if (beamRefs.Count > 0)
+                            sharedViewModel.CurrentComponentType = DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models.StructuralComponentType.Beam;
+                        else if (foundationRefs.Count > 0)
+                            sharedViewModel.CurrentComponentType = DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models.StructuralComponentType.Foundation;
+                        else if (slabRefs.Count > 0)
+                            sharedViewModel.CurrentComponentType = DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models.StructuralComponentType.Slab;
+                    }
+                    else if (sharedViewModel.IsSelectingBeam) sharedViewModel.ProcessSelectedBeam(references);
+                    else if (sharedViewModel.IsSelectingColumn) sharedViewModel.ProcessSelectedColumn(references);
+                    else if (sharedViewModel.IsSelectingFoundation) sharedViewModel.ProcessSelectedSlab(references, isFoundation: true);
+                    else sharedViewModel.ProcessSelectedSlab(references, isFoundation: false);
                 }
                 else
                 {
@@ -155,16 +288,19 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                 }
                 
                 sharedViewModel.IsSelectingSlab = false;
+                sharedViewModel.IsSelectingFoundation = false;
+                sharedViewModel.IsSelectingBeam = false;
+                sharedViewModel.IsSelectingColumn = false;
+                sharedViewModel.IsSelectingComponent = false;
             }
-            else if (sharedViewModel.IsSweepSelectingSlab)
+            else
             {
-                string title = "quét chọn sàn";
                 System.Collections.Generic.IList<Element> elements = new System.Collections.Generic.List<Element>();
                 try
                 {
                     elements = uiDoc.Selection.PickElementsByRectangle(
-                        new FloorSelectionFilter(),
-                        "Quét vùng chuột để chọn nhiều sàn.");
+                        filter,
+                        $"Quét vùng chuột để chọn nhiều {title}.");
                 }
                 catch (Autodesk.Revit.Exceptions.OperationCanceledException) { }
                 catch (Exception ex)
@@ -176,7 +312,84 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                 {
                     var sweepRefs = new System.Collections.Generic.List<Reference>();
                     foreach (var elem in elements) sweepRefs.Add(new Reference(elem));
-                    sharedViewModel.ProcessSelectedSlab(sweepRefs);
+                    
+                    if (sharedViewModel.IsSweepSelectingComponent)
+                    {
+                        var doc = uiDoc.Document;
+                        var slabRefs = new System.Collections.Generic.List<Reference>();
+                        var foundationRefs = new System.Collections.Generic.List<Reference>();
+                        var beamRefs = new System.Collections.Generic.List<Reference>();
+                        var columnRefs = new System.Collections.Generic.List<Reference>();
+
+                        foreach (var r in sweepRefs)
+                        {
+                            var elem = doc.GetElement(r);
+                            if (elem == null || elem.Category == null) continue;
+                            BuiltInCategory cat = elem.Category.BuiltInCategory;
+                            
+                            if (cat == BuiltInCategory.OST_StructuralFoundation) 
+                                foundationRefs.Add(r);
+                            else if (cat == BuiltInCategory.OST_Floors)
+                            {
+                                bool isFoundationSlab = false;
+                                if (elem is Floor floor && doc.GetElement(floor.GetTypeId()) as FloorType is FloorType floorType && floorType.IsFoundationSlab)
+                                {
+                                    isFoundationSlab = true;
+                                }
+
+                                if (isFoundationSlab) foundationRefs.Add(r);
+                                else slabRefs.Add(r);
+                            }
+                            else if (cat == BuiltInCategory.OST_StructuralFraming) beamRefs.Add(r);
+                            else if (cat == BuiltInCategory.OST_StructuralColumns) columnRefs.Add(r);
+                        }
+
+                        bool appendCategory = false;
+                        if (foundationRefs.Count > 0) { sharedViewModel.ProcessSelectedSlab(foundationRefs, showDialog: false, isFoundation: true, appendSelection: appendCategory); appendCategory = true; }
+                        if (slabRefs.Count > 0) { sharedViewModel.ProcessSelectedSlab(slabRefs, showDialog: false, isFoundation: false, appendSelection: appendCategory); appendCategory = true; }
+                        if (beamRefs.Count > 0) { sharedViewModel.ProcessSelectedBeam(beamRefs, appendCategory); appendCategory = true; }
+                        if (columnRefs.Count > 0) sharedViewModel.ProcessSelectedColumn(columnRefs, appendCategory);
+                        sharedViewModel.SetSelectedComponentComposition(
+                            slabRefs.Count, foundationRefs.Count, beamRefs.Count, columnRefs.Count);
+
+                        if (slabRefs.Count > 0 || foundationRefs.Count > 0 || beamRefs.Count > 0 || columnRefs.Count > 0)
+                        {
+                            var parts = new System.Collections.Generic.List<string>();
+                            string details = "Đã quét chọn thành công các cấu kiện từ Revit:\n\n";
+
+                            if (foundationRefs.Count > 0)
+                            {
+                                parts.Add($"{foundationRefs.Count} móng");
+                                details += $"• Móng: {foundationRefs.Count} cấu kiện (Diện tích: {sharedViewModel.SelectedSlabArea:F2} m²)\n";
+                            }
+                            if (slabRefs.Count > 0)
+                            {
+                                parts.Add($"{slabRefs.Count} sàn");
+                                details += $"• Sàn: {slabRefs.Count} cấu kiện (Diện tích: {sharedViewModel.SelectedSlabArea:F2} m²)\n";
+                            }
+                            if (beamRefs.Count > 0)
+                            {
+                                parts.Add($"{beamRefs.Count} dầm");
+                                details += $"• Dầm: {beamRefs.Count} cấu kiện (Tiết diện: {sharedViewModel.BeamWidth:F0}x{sharedViewModel.BeamDepth:F0} mm)\n";
+                            }
+                            if (columnRefs.Count > 0)
+                            {
+                                parts.Add($"{columnRefs.Count} cột");
+                                details += $"• Cột: {columnRefs.Count} cấu kiện (Tiết diện: {sharedViewModel.ColumnWidth:F0}x{sharedViewModel.ColumnDepth:F0} mm, H={sharedViewModel.ColumnHeight:F0} mm)\n";
+                            }
+
+                            details += "\n- Tự động đồng bộ và tính toán lại các thông số ván khuôn tối ưu.";
+                            sharedViewModel.RevitVersionStatus = $"Đã chọn: {string.Join(", ", parts)}";
+                            System.Windows.MessageBox.Show(details, "Revit API Integration", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                        }
+                        
+                        if (sharedViewModel.CurrentComponentType == DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models.StructuralComponentType.Slab && slabRefs.Count == 0 && foundationRefs.Count == 0 && (beamRefs.Count > 0 || columnRefs.Count > 0))
+                             sharedViewModel.CurrentComponentType = columnRefs.Count > 0 ? DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models.StructuralComponentType.Column : DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models.StructuralComponentType.Beam;
+                    }
+                    else if (sharedViewModel.IsSweepSelectingBeam) sharedViewModel.ProcessSelectedBeam(sweepRefs);
+                    else if (sharedViewModel.IsSweepSelectingColumn) sharedViewModel.ProcessSelectedColumn(sweepRefs);
+                    else if (sharedViewModel.IsSweepSelectingFoundation) sharedViewModel.ProcessSelectedSlab(sweepRefs, isFoundation: true);
+                    else sharedViewModel.ProcessSelectedSlab(sweepRefs, isFoundation: false);
                 }
                 else
                 {
@@ -184,6 +397,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                 }
                 
                 sharedViewModel.IsSweepSelectingSlab = false;
+                sharedViewModel.IsSweepSelectingFoundation = false;
+                sharedViewModel.IsSweepSelectingBeam = false;
+                sharedViewModel.IsSweepSelectingColumn = false;
+                sharedViewModel.IsSweepSelectingComponent = false;
             }
         }
     }
@@ -216,5 +433,92 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
     public class CmdPreview3D : AppCommandBase
     {
         protected override string TargetTab => "Preview3DView";
+    }
+
+    // ── Lựa Chọn ──
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdSelectComponent : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "SelectComponent";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdSweepSelectComponent : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "SweepSelectComponent";
+    }
+
+    // ── Dữ Liệu ──
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdSelectGroundFloor : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "SelectGroundFloor";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdUpdateResults : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "UpdateResults";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdRunAnalysis : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "RunAnalysis";
+    }
+
+    // ── Tính Toán ──
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdRecalculate : AppCommandBase
+    {
+        protected override string TargetTab => "TinhToanView";
+        protected override string TargetAction => "Recalculate";
+    }
+
+    // ── Xuất & Mô Hình ──
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdCreateRevitModel : AppCommandBase
+    {
+        protected override string TargetTab => "KetQuaView";
+        protected override string TargetAction => "CreateRevitModel";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdCalculateAllFloors : AppCommandBase
+    {
+        protected override string TargetTab => "KetQuaView";
+        protected override string TargetAction => "CalculateAllFloors";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdExportExcel : AppCommandBase
+    {
+        protected override string TargetTab => "KetQuaView";
+        protected override string TargetAction => "ExportExcel";
+    }
+
+    // ── Cài Đặt ──
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdSaveSettings : AppCommandBase
+    {
+        protected override string TargetTab => "ThongSoView";
+        protected override string TargetAction => "SaveSettings";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdResetSettings : AppCommandBase
+    {
+        protected override string TargetTab => "ThongSoView";
+        protected override string TargetAction => "ResetSettings";
     }
 }
