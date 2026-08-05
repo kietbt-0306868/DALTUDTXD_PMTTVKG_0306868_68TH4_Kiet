@@ -1348,7 +1348,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             double propsPerM2 = 1.0 / ((Math.Max(1, p.Joist2Spacing) / 1000.0) * (Math.Max(1, p.SupportSpacing) / 1000.0));
             double propCount = Math.Ceiling(matSanArea * propsPerM2 * 1.05);
             double diagonalBraceCount = Math.Ceiling(propCount / 6.0) * 2;
-
             return new List<MaterialItem>
             {
                 new MaterialItem { MaterialName = $"Ván khuôn mặt sàn (Phủ phim)", Specification = $"{p.VanMatThickness:F0} x 1220 x 2440 mm", Quantity = plywoodMatSan, Unit = "Tấm" },
@@ -1416,8 +1415,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             double tieRodCount = Math.Ceiling(lengthMm / Math.Max(75, p.BeamTieRodSpacing)) * 2;
             double sideBraceStations = Math.Ceiling(lengthMm / Math.Max(75, p.BeamSideBraceSpacing));
             double sideBraceCount = sideBraceStations * Math.Max(1, p.BeamSideBraceCountPerStation);
+            double surfaceTieCount = p.BeamPlacementModeIndex == 2
+                ? Math.Ceiling(lengthMm / Math.Max(300, p.BeamEdgeSurfaceTieRodSpacing))
+                : 0;
 
-            return new List<MaterialItem>
+            var items = new List<MaterialItem>
             {
                 new MaterialItem { MaterialName = $"Ván khuôn đáy dầm (Phủ phim)", Specification = $"{p.BeamBottomPlywoodThickness:F0} x 1220 x 2440 mm", Quantity = bottomPlywoodCount > 0 ? bottomPlywoodCount : 1, Unit = "Tấm" },
                 new MaterialItem { MaterialName = $"Ván khuôn thành dầm (Phủ phim)", Specification = $"{p.BeamSidePlywoodThickness:F0} x 1220 x 2440 mm", Quantity = sidePlywoodCount > 0 ? sidePlywoodCount : 1, Unit = "Tấm" },
@@ -1433,6 +1435,24 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 new MaterialItem { MaterialName = "Chống xiên thành dầm biên", Specification = $"D{p.BeamSideBraceDiameter:F0}×{p.BeamSideBraceThickness:F1} mm", Quantity = sideBraceCount, Unit = "Cây" },
                 new MaterialItem { MaterialName = "Bản đế chống xiên dầm", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = sideBraceStations, Unit = "Cái" }
             };
+            if (surfaceTieCount > 0)
+            {
+                items.Add(new MaterialItem
+                {
+                    MaterialName = "Ty chết cố định trên mặt dầm biên",
+                    Specification = $"D{p.BeamEdgeSurfaceTieRodDiameter:F0} · L neo {p.BeamEdgeSurfaceTieRodAnchorLength:F0} mm @ {p.BeamEdgeSurfaceTieRodSpacing:F0} mm",
+                    Quantity = surfaceTieCount,
+                    Unit = "Thanh"
+                });
+                items.Add(new MaterialItem
+                {
+                    MaterialName = "Bát/đĩa neo ty chết dầm biên",
+                    Specification = $"Cho ty D{p.BeamEdgeSurfaceTieRodDiameter:F0}",
+                    Quantity = surfaceTieCount * 2,
+                    Unit = "Cái"
+                });
+            }
+            return items;
         }
 
         private List<MaterialItem> CalculateColumnQuantities(double widthMm, double depthMm, double heightMm,

@@ -680,6 +680,26 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
             group.Children.Add(new GeometryModel3D(yokeBuilder.ToMesh(), yokeMat));
 
+            // Standalone beam preview: surface-fixed rods are shown only when the
+            // selected arrangement is explicitly a perimeter beam (mode 2).
+            if (_sharedViewModel.BeamPlacementModeIndex == 2)
+            {
+                var surfaceTieBuilder = new SimpleMeshBuilder();
+                const double surfaceTieSpacing = 1000.0;
+                const double surfaceTieLength = 1200.0;
+                const double surfaceTieDiameter = 12.0;
+                double rodZ = zConcreteBottom + beamD + surfaceTieDiameter / 2.0 + 8.0;
+                for (double x = surfaceTieSpacing / 2.0; x < beamL; x += surfaceTieSpacing)
+                {
+                    Point3D outside = new Point3D(x, -beamW / 2.0 - sidePlyThick - 40.0, rodZ);
+                    Point3D inside = new Point3D(x, beamW / 2.0 + surfaceTieLength, rodZ);
+                    surfaceTieBuilder.AddCylinder(outside, inside, surfaceTieDiameter, 8);
+                    surfaceTieBuilder.AddBox(inside, 110.0, 110.0, 10.0);
+                    surfaceTieBuilder.AddBox(outside, 70.0, 12.0, 12.0);
+                }
+                group.Children.Add(new GeometryModel3D(surfaceTieBuilder.ToMesh(), steelMat));
+            }
+
             // 4. Props
             if (!isGroundLevel)
             {

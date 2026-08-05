@@ -79,3 +79,10 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+
+# Visual Studio / .NET
+.vs/
+**/[Bb]in/
+**/[Oo]bj/
+*.user
+packages/

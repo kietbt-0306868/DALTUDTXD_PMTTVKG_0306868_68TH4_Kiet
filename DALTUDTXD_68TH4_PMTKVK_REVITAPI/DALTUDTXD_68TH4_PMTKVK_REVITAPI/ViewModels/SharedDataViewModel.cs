@@ -266,6 +266,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             parameters.NetExposedPerimeterM = info.NetExposedPerimeterM;
             parameters.NetFormworkLengthMm = info.NetFormworkLengthMm;
             parameters.IntersectingElementUniqueIds = info.IntersectingElementUniqueIds.ToArray();
+            if (info.ComponentType == StructuralComponentType.Beam && info.HasBeamSideClassification)
+                parameters.BeamPlacementModeIndex = info.IsPerimeterBeam ? 2 : 1;
         }
 
         public static void ApplyStructuralGeometry(CalculationParameters parameters, FloorElementModel component)

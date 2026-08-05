@@ -936,7 +936,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             switch (component.ComponentType)
             {
                 case StructuralComponentType.Beam:
-                    return $"B|{p.BeamWidth:F1}|{p.BeamDepth:F1}|{p.BeamLength:F1}|{p.NetFormworkLengthMm:F1}|{p.NetPlywoodAreaM2:F3}|{p.BeamBottomPlywoodThickness:F1}|{p.BeamSidePlywoodThickness:F1}|{p.BeamBottomYokeSpacing:F1}|{p.BeamSideYokeSpacing:F1}|{p.BeamPrimaryWalerSpacing:F1}|{p.BeamSecondaryJoistWidth:F1}|{p.BeamSecondaryJoistDepth:F1}|{p.BeamPrimaryWalerWidth:F1}|{p.BeamPrimaryWalerDepth:F1}|{p.BeamPropSpacing:F1}";
+                    return $"B|{p.BeamWidth:F1}|{p.BeamDepth:F1}|{p.BeamLength:F1}|{p.NetFormworkLengthMm:F1}|{p.NetPlywoodAreaM2:F3}|{p.BeamPlacementModeIndex}|{p.BeamBottomPlywoodThickness:F1}|{p.BeamSidePlywoodThickness:F1}|{p.BeamBottomYokeSpacing:F1}|{p.BeamSideYokeSpacing:F1}|{p.BeamPrimaryWalerSpacing:F1}|{p.BeamSecondaryJoistWidth:F1}|{p.BeamSecondaryJoistDepth:F1}|{p.BeamPrimaryWalerWidth:F1}|{p.BeamPrimaryWalerDepth:F1}|{p.BeamPropSpacing:F1}|{p.BeamEdgeSurfaceTieRodDiameter:F1}|{p.BeamEdgeSurfaceTieRodSpacing:F1}|{p.BeamEdgeSurfaceTieRodAnchorLength:F1}";
                 case StructuralComponentType.Column:
                     return $"C|{p.ColumnWidth:F1}|{p.ColumnDepth:F1}|{p.ColumnHeight:F1}|{p.NetSideFormworkAreaM2:F3}|{p.ColumnIsBoundaryOrCorner}|{p.ColumnSupportedBraceDirectionCount}|{p.ColumnPlywoodThickness:F1}|{p.ColumnStiffenerWidth:F1}|{p.ColumnStiffenerDepth:F1}|{p.ColumnStiffenerSpacing:F1}|{p.ColumnYokeBottomSpacing:F1}|{p.ColumnYokeUpperSpacing:F1}|{p.ColumnYokeWidth:F1}|{p.ColumnYokeHeight:F1}|{p.ColumnYokeThickness:F1}|{p.ColumnTieRodDiameter:F1}|{p.ColumnTieRodCountPerFace}|{p.ColumnBraceCount}";
                 default:

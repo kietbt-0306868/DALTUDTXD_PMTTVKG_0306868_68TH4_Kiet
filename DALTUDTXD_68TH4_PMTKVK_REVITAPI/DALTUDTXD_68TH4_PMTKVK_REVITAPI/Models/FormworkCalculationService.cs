@@ -65,7 +65,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public double Joist1Spacing { get; set; }
         public double Joist2Spacing { get; set; }
         public double SupportSpacing { get; set; }
-        
+
         public string SelectedFloorDetailName { get; set; }
         public bool IsFloorSelected { get; set; } = false;
         public bool IsGroundLevel { get; set; } = false;
@@ -102,6 +102,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public double BeamTieRodDiameter { get; set; } = 16.0;
         public double BeamTieRodSpacing { get; set; } = 1200.0;
         public double BeamTieRodAllowableCapacity { get; set; } = 20.0;
+        // Fixed rods laid across the slab surface are a perimeter-beam accessory.
+        public double BeamEdgeSurfaceTieRodDiameter { get; set; } = 12.0;
+        public double BeamEdgeSurfaceTieRodSpacing { get; set; } = 1000.0;
+        public double BeamEdgeSurfaceTieRodAnchorLength { get; set; } = 1200.0;
+        public double BeamEdgeSurfaceTieRodAllowableCapacity { get; set; } = 12.0;
         public double BeamSideBraceSpacing { get; set; } = 1200.0;
         public double BeamSideBraceAngle { get; set; } = 55.0;
         public double BeamSideBraceDiameter { get; set; } = 48.0;
@@ -188,7 +193,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public ComponentResult SupportSoleBearing { get; set; } = new ComponentResult();
         public ComponentResult SupportHeadBearing { get; set; } = new ComponentResult();
         public ComponentResult SupportJack { get; set; } = new ComponentResult();
-        
         // Beam specific
         public ComponentResult BeamSidePlywood { get; set; } = new ComponentResult();
         public ComponentResult BeamSideYoke { get; set; } = new ComponentResult();
@@ -197,6 +201,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public ComponentResult BeamSecondaryJoist { get; set; } = new ComponentResult();
         public ComponentResult BeamPrimaryWaler { get; set; } = new ComponentResult();
         public ComponentResult BeamTieRod { get; set; } = new ComponentResult();
+        public ComponentResult BeamEdgeSurfaceTieRod { get; set; } = new ComponentResult();
         public ComponentResult BeamSideBrace { get; set; } = new ComponentResult();
         public ComponentResult BeamStripping { get; set; } = new ComponentResult();
         public ComponentResult BeamVibrationProcedure { get; set; } = new ComponentResult();
@@ -240,7 +245,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             {
                 Plywood, Joist1, Joist2,
                 BeamSidePlywood, BeamSideYoke, BeamBottomPlywood,
-                BeamSecondaryJoist, BeamPrimaryWaler, BeamTieRod, BeamSideBrace,
+                BeamSecondaryJoist, BeamPrimaryWaler, BeamTieRod, BeamEdgeSurfaceTieRod, BeamSideBrace,
                 BeamStripping, BeamVibrationProcedure,
                 ColumnPlywood, ColumnStiffener, ColumnYoke, ColumnTieRod, ColumnBrace, ColumnBraceBaseBearing,
                 ColumnCable, ColumnTurnbuckle, ColumnAnchor, ColumnPlumb, ColumnPouring
@@ -605,6 +610,23 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.BeamSideResultantPerMetre = horizontalResultant;
             double tieDemand = horizontalResultant * Math.Max(0.1, p.BeamTieRodSpacing / 1000.0);
             res.BeamTieRod.StressResult = new KetQuaTinhToan($"Ty giằng thành dầm D{p.BeamTieRodDiameter:F0}", "Khả năng chịu kéo", LoaiKiemTra.ChiuLucDoc, "T=H_d·s_ty ≤ [T]", tieDemand, Math.Max(0.1, p.BeamTieRodAllowableCapacity), "kN");
+            if (p.BeamPlacementModeIndex == 2)
+            {
+                double surfaceTieDemand = horizontalResultant *
+                    Math.Max(0.1, p.BeamEdgeSurfaceTieRodSpacing / 1000.0);
+                res.BeamEdgeSurfaceTieRod.StressResult = new KetQuaTinhToan(
+                    $"Ty chết trên mặt dầm biên D{p.BeamEdgeSurfaceTieRodDiameter:F0}",
+                    "Khả năng chịu kéo", LoaiKiemTra.ChiuLucDoc,
+                    "T=H_d·s_ty ≤ [T]", surfaceTieDemand,
+                    Math.Max(0.1, p.BeamEdgeSurfaceTieRodAllowableCapacity), "kN");
+                double requiredSurfaceAnchor = Math.Max(500.0,
+                    40.0 * Math.Max(1.0, p.BeamEdgeSurfaceTieRodDiameter));
+                res.BeamEdgeSurfaceTieRod.DeflectionResult = new KetQuaTinhToan(
+                    $"Neo ty chết trên mặt dầm biên D{p.BeamEdgeSurfaceTieRodDiameter:F0}",
+                    "Chiều dài neo", LoaiKiemTra.Khac,
+                    "L_neo ≥ max(40d; 500 mm)", requiredSurfaceAnchor,
+                    Math.Max(1.0, p.BeamEdgeSurfaceTieRodAnchorLength), "mm");
+            }
             double braceAngleRad = Math.Max(30.0, Math.Min(75.0, p.BeamSideBraceAngle)) * Math.PI / 180.0;
             int braceCount = Math.Max(1, p.BeamSideBraceCountPerStation);
             double braceDemand = horizontalResultant * Math.Max(0.1, p.BeamSideBraceSpacing / 1000.0) /
@@ -641,11 +663,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.ReportItems.Add(BuildReportItem(prefix, "Ván thành: Kiểm tra độ võng", res.BeamSidePlywood.DeflectionResult, p.IsBeamSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Gông thành: Kiểm tra ứng suất", res.BeamSideYoke.StressResult, p.IsBeamSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Ty giằng D16: Kiểm tra kéo", res.BeamTieRod.StressResult, p.IsBeamSelected));
+            if (p.BeamPlacementModeIndex == 2)
+            {
+                res.ReportItems.Add(BuildReportItem(prefix, "DẦM BIÊN · Ty chết trên mặt: kiểm tra kéo", res.BeamEdgeSurfaceTieRod.StressResult, p.IsBeamSelected));
+                res.ReportItems.Add(BuildReportItem(prefix, "DẦM BIÊN · Ty chết trên mặt: kiểm tra chiều dài neo", res.BeamEdgeSurfaceTieRod.DeflectionResult, p.IsBeamSelected));
+            }
             res.ReportItems.Add(BuildReportItem(prefix, "Chống xiên thành dầm biên", res.BeamSideBrace.StressResult, p.IsBeamSelected));
             AddVerticalSupportReportItems(res, prefix, p.IsBeamSelected, p.IsGroundLevel);
 
             bool sideRestraintOk = p.BeamPlacementModeIndex == 1 ? res.BeamTieRod.IsOk :
-                                   p.BeamPlacementModeIndex == 2 ? res.BeamSideBrace.IsOk :
+                                   p.BeamPlacementModeIndex == 2 ? res.BeamSideBrace.IsOk && res.BeamEdgeSurfaceTieRod.IsOk :
                                    res.BeamTieRod.IsOk && res.BeamSideBrace.IsOk;
             res.IsSystemOk = res.BeamBottomPlywood.IsOk && res.BeamSecondaryJoist.IsOk &&
                              res.BeamPrimaryWaler.IsOk && res.BeamSidePlywood.IsOk && res.BeamSideYoke.IsOk &&
@@ -1330,6 +1357,22 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                         changed |= IncreaseParameter(() => p.BeamPrimaryWalerDepth, v => p.BeamPrimaryWalerDepth = v, 300, 25, "Chiều cao gông/nẹp thành", design.Adjustments);
                     if (!beamResult.BeamTieRod.IsOk && p.BeamPlacementModeIndex != 2)
                         changed |= UpgradeBeamTieRod(p, design.Adjustments);
+                    if (p.BeamPlacementModeIndex == 2 && !beamResult.BeamEdgeSurfaceTieRod.IsOk)
+                    {
+                        if (beamResult.BeamEdgeSurfaceTieRod.StressResult != null &&
+                            !beamResult.BeamEdgeSurfaceTieRod.StressResult.IsThoaman)
+                            changed |= ReduceParameter(() => p.BeamEdgeSurfaceTieRodSpacing,
+                                           v => p.BeamEdgeSurfaceTieRodSpacing = v, 300, 100,
+                                           "Bước ty chết trên mặt dầm biên", design.Adjustments) ||
+                                       IncreaseParameter(() => p.BeamEdgeSurfaceTieRodAllowableCapacity,
+                                           v => p.BeamEdgeSurfaceTieRodAllowableCapacity = v, 40, 2,
+                                           "Sức chịu kéo ty chết dầm biên", design.Adjustments);
+                        if (beamResult.BeamEdgeSurfaceTieRod.DeflectionResult != null &&
+                            !beamResult.BeamEdgeSurfaceTieRod.DeflectionResult.IsThoaman)
+                            changed |= IncreaseParameter(() => p.BeamEdgeSurfaceTieRodAnchorLength,
+                                v => p.BeamEdgeSurfaceTieRodAnchorLength = v, 2400, 100,
+                                "Chiều dài neo ty chết dầm biên", design.Adjustments);
+                    }
                     if (!beamResult.BeamSideBrace.IsOk && p.BeamPlacementModeIndex != 1)
                         changed |= UpgradeBeamSideBrace(p, design.Adjustments);
                     if (!beamResult.BeamStripping.IsOk && p.BeamStrippingStrengthPercent < 70)

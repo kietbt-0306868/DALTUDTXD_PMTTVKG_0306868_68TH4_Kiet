@@ -636,6 +636,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             double primarySpacing = Positive(design?.Joist2Spacing ?? _data.Joist2Spacing, 1000);
             double supportSpacing = Positive(design?.SupportSpacing ?? _data.SupportSpacing, 1000);
             List<Models.FormworkCutoutRectangle> localCutouts = GetLocalPlanCutouts(intersections?.PlanCutouts);
+            SupportFootprint supportedSlab = _supportFootprints.FirstOrDefault(footprint =>
+                footprint.SourceElementId == element.Id.Value);
 
             double plywoodBottom = slabBottom - plywoodThickness;
             AddPlanSurfaceWithCutouts(minX, maxX, minY, maxY,
@@ -668,8 +670,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (supportTop - supportBottom < 500) return;
 
             double propDiameter = Positive(design?.CayChongDiameter ?? _data.CayChongDiameter, 48);
-            SupportFootprint supportedSlab = _supportFootprints.FirstOrDefault(footprint =>
-                footprint.SourceElementId == element.Id.Value);
             foreach (double x in Positions(minX, maxX, supportSpacing, _compactLod ? 7 : 11))
             {
                 foreach (double y in primaryYs)
@@ -745,6 +745,47 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 if (!IsDistanceInClearSegment(distance, clearBeamSegments)) continue;
                 Point3D point = start + axis * distance;
                 _timber.AddOrientedBox(new Point3D(point.X, point.Y, bottomZ - bottomPly - joistDepth / 2), axis, cross, up, joistWidth, beamWidth + 300, joistDepth);
+            }
+
+            // Fixed surface rods belong only to a perimeter beam. Classify each station
+            // from the actual floor footprint: slab on exactly one beam side means edge;
+            // slab on both sides means an interior beam and no fixed surface rod.
+            double beamTop = Z(box.Max.Z);
+            List<SupportFootprint> beamTopSlabs = _supportFootprints
+                .Where(floor => Math.Abs(floor.TopZ - beamTop) <= 250.0)
+                .ToList();
+            double surfaceTieSpacing = Positive(design?.BeamEdgeSurfaceTieRodSpacing ?? 1000.0, 1000.0);
+            double surfaceTieDiameter = Positive(design?.BeamEdgeSurfaceTieRodDiameter ?? 12.0, 12.0);
+            double requestedSurfaceAnchor = Positive(design?.BeamEdgeSurfaceTieRodAnchorLength ?? 1200.0, 1200.0);
+            foreach (double distance in Distances(length, surfaceTieSpacing, _compactLod ? 8 : 16))
+            {
+                if (!IsDistanceInClearSegment(distance, clearBeamSegments)) continue;
+                Point3D station = start + axis * distance;
+                double probeOffset = beamWidth / 2.0 + 250.0;
+                Point3D plusProbe = station + cross * probeOffset;
+                Point3D minusProbe = station - cross * probeOffset;
+                SupportFootprint plusSlab = beamTopSlabs.FirstOrDefault(floor => floor.Contains(plusProbe, 40.0));
+                SupportFootprint minusSlab = beamTopSlabs.FirstOrDefault(floor => floor.Contains(minusProbe, 40.0));
+                if ((plusSlab == null) == (minusSlab == null)) continue;
+
+                double interiorSign = plusSlab != null ? 1.0 : -1.0;
+                SupportFootprint supportingSlab = plusSlab ?? minusSlab;
+                double anchorLength = requestedSurfaceAnchor;
+                Point3D anchorPoint = station + cross * (interiorSign * (beamWidth / 2.0 + anchorLength));
+                while (anchorLength >= 500.0 && !supportingSlab.Contains(anchorPoint, 30.0))
+                {
+                    anchorLength -= 100.0;
+                    anchorPoint = station + cross * (interiorSign * (beamWidth / 2.0 + anchorLength));
+                }
+                if (anchorLength < 500.0) continue;
+
+                double exteriorSign = -interiorSign;
+                Point3D rodStart = station + cross * (exteriorSign * (beamWidth / 2.0 + sidePly + 40.0));
+                rodStart.Z = beamTop + surfaceTieDiameter / 2.0 + 8.0;
+                anchorPoint.Z = rodStart.Z;
+                _steel.AddCylinder(rodStart, anchorPoint, surfaceTieDiameter, 8);
+                _steel.AddOrientedBox(anchorPoint, axis, cross, up, 120.0, 120.0, 10.0);
+                AddWingNut(rodStart, axis, cross, up, surfaceTieDiameter);
             }
 
             double supportBottom = FindSupportElevation(box.Min.Z * MmPerFoot);

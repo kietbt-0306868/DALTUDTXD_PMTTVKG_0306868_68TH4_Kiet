@@ -36,6 +36,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public List<string> IntersectingElementUniqueIds { get; } = new List<string>();
         public List<FormworkCutoutRectangle> PlanCutouts { get; } = new List<FormworkCutoutRectangle>();
         public List<FormworkLengthInterval> BeamColumnGaps { get; } = new List<FormworkLengthInterval>();
+        public bool HasBeamSideClassification { get; set; }
+        public bool IsPerimeterBeam { get; set; }
 
         // +local X, -local X, +local Y, -local Y. Each value is the
         // vertical height occupied by a beam on that column face.

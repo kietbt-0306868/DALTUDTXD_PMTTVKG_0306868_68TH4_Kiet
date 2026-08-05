@@ -124,6 +124,30 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             double curveLengthFt = axis.GetLength();
             if (curveLengthFt < 1e-9) return;
             axis = axis.Normalize();
+            XYZ cross = new XYZ(-axis.Y, axis.X, 0).Normalize();
+            XYZ midpoint = (start + end) * 0.5;
+            double probeFt = (Math.Max(100.0, beam.Model.Elevation) / 2.0 + 250.0) / MmPerFoot;
+            XYZ plusProbe = midpoint + cross * probeFt;
+            XYZ minusProbe = midpoint - cross * probeFt;
+            List<Node> supportingSlabs = neighbours
+                .Where(item => item.Model.ComponentType == StructuralComponentType.Slab &&
+                               Math.Abs(item.Box.Max.Z - beam.Box.Max.Z) * MmPerFoot <= 300.0)
+                .ToList();
+            if (supportingSlabs.Count > 0)
+            {
+                double toleranceFt = 50.0 / MmPerFoot;
+                bool plusHasSlab = supportingSlabs.Any(slab =>
+                    plusProbe.X >= slab.Box.Min.X - toleranceFt && plusProbe.X <= slab.Box.Max.X + toleranceFt &&
+                    plusProbe.Y >= slab.Box.Min.Y - toleranceFt && plusProbe.Y <= slab.Box.Max.Y + toleranceFt);
+                bool minusHasSlab = supportingSlabs.Any(slab =>
+                    minusProbe.X >= slab.Box.Min.X - toleranceFt && minusProbe.X <= slab.Box.Max.X + toleranceFt &&
+                    minusProbe.Y >= slab.Box.Min.Y - toleranceFt && minusProbe.Y <= slab.Box.Max.Y + toleranceFt);
+                if (plusHasSlab || minusHasSlab)
+                {
+                    info.HasBeamSideClassification = true;
+                    info.IsPerimeterBeam = plusHasSlab != minusHasSlab;
+                }
+            }
             double modelLengthMm = Math.Max(1, beam.Model.StoryHeight);
             var rawIntervals = new List<FormworkLengthInterval>();
             foreach (Node column in neighbours.Where(item => item.Model.ComponentType == StructuralComponentType.Column))

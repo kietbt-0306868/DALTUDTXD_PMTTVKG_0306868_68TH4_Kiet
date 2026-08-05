@@ -60,9 +60,7 @@
                             IsRotationEnabled="True"
                             IsPanEnabled="True"
                             IsZoomEnabled="True"
-                            FXAASamples="4"
-                            RenderOptions.EdgeMode="Aliased"
-                            TexturingQuality="Low">
+                            RenderOptions.EdgeMode="Aliased">
             <hx:DefaultLights />
             <ModelVisual3D Content="{Binding ModelGroup}" />
         </hx:HelixViewport3D>
