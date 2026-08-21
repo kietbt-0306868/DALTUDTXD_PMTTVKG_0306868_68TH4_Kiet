@@ -5,9 +5,16 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
-using HelixToolkit.Wpf;
-using HelixToolkit;
+using HelixToolkit.Wpf.SharpDX;
+using HelixToolkit.SharpDX;
+using Point3D = System.Windows.Media.Media3D.Point3D;
+using Vector3D = System.Windows.Media.Media3D.Vector3D;
 using System.Linq;
+using System.Windows;
+using System.Windows.Input;
+using System.Diagnostics;
+using Autodesk.Revit.UI;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 {
@@ -15,9 +22,18 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
     {
         private SharedDataViewModel _sharedViewModel;
         private bool _hasProjectModel;
+        private FrameworkElement _nativePreviewControl;
 
-        private Model3DGroup _modelGroup;
-        public Model3DGroup ModelGroup
+        public FrameworkElement NativePreviewControl
+        {
+            get => _nativePreviewControl;
+            private set { _nativePreviewControl = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsNativePreview)); }
+        }
+
+        public bool IsNativePreview => NativePreviewControl != null;
+
+        private GroupModel3D _modelGroup = new GroupModel3D();
+        public GroupModel3D ModelGroup
         {
             get => _modelGroup;
             set { _modelGroup = value; OnPropertyChanged(); }
@@ -27,8 +43,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public bool IsRendering
         {
             get => _isRendering;
-            set { _isRendering = value; OnPropertyChanged(); }
+            set
+            {
+                _isRendering = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
         }
+
+        private bool _renderCancellationRequested;
+        public ICommand CancelRenderCommand { get; }
 
         private string _renderSummary = "Đang đọc mô hình kết cấu từ Revit...";
         public string RenderSummary
@@ -78,6 +102,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             _sharedViewModel.PropertyChanged += SharedViewModel_PropertyChanged;
             _sharedViewModel.SlabSelectionCompleted += OnSlabSelectionCompleted;
             _sharedViewModel.Render3DRequested += OnRender3DRequested;
+            CancelRenderCommand = new RelayCommand(_ => CancelRender(), _ => IsRendering);
             
             // The full Revit project is expensive to tessellate. It is generated lazily
             // when the preview tab becomes visible and then reused until the window closes.
@@ -91,6 +116,52 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         {
             if (_sharedViewModel?.RevitDoc != null && !_hasProjectModel)
                 Generate3DModelAsync();
+        }
+
+        private int _renderProgress;
+        public int RenderProgress
+        {
+            get => _renderProgress;
+            private set { _renderProgress = Math.Max(0, Math.Min(100, value)); OnPropertyChanged(); }
+        }
+
+        private string _renderProgressText = "Sẵn sàng dựng mô hình 3D.";
+        public string RenderProgressText
+        {
+            get => _renderProgressText;
+            private set { _renderProgressText = value; OnPropertyChanged(); }
+        }
+
+        private string _renderRemainingText = string.Empty;
+        public string RenderRemainingText
+        {
+            get => _renderRemainingText;
+            private set { _renderRemainingText = value; OnPropertyChanged(); }
+        }
+
+        private Stopwatch _renderStopwatch;
+
+        public void ReleaseProjectModel()
+        {
+            if (_sharedViewModel?.RevitDoc == null) return;
+            if (IsRendering)
+            {
+                CancelRender();
+                return;
+            }
+            FrameworkElement oldPreview = NativePreviewControl;
+            NativePreviewControl = null;
+            if (oldPreview is IDisposable nativePreview) nativePreview.Dispose();
+            try
+            {
+                NativeRevitFormworkPreviewService.RemovePreviewArtifacts(_sharedViewModel.RevitDoc);
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine($"Preview cleanup failed: {exception}");
+            }
+            _hasProjectModel = false;
+            RenderSummary = "Preview 3D đã đóng; các phần tử ván khuôn và phụ kiện tạm đã được dọn khỏi dự án.";
         }
 
         private void OnSlabSelectionCompleted(object sender, SlabSelectionEventArgs e)
@@ -122,8 +193,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     _sharedViewModel.ScheduledDesignRevision > 0)
                 {
                     _hasProjectModel = false;
-                    RenderSummary = "Đang dựng lại mô hình từ bộ thông số đã kiểm tra đạt yêu cầu...";
-                    Generate3DModelAsync();
+                    // Calculation and schedule synchronization are data-only operations.
+                    // Do not load/create accessory families or mutate the Revit document
+                    // until the user explicitly opens/requests the 3D model.
+                    RenderSummary = "Thiết kế đã thay đổi; nhấn Dựng hình Revit 3D để cập nhật mô hình.";
                     return;
                 }
 
@@ -187,32 +260,64 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public void Generate3DModelAsync()
         {
             if (IsRendering) return;
+            _renderCancellationRequested = false;
             IsRendering = true;
+            RenderProgress = 0;
+            RenderProgressText = "Đang khởi tạo quá trình dựng mô hình...";
+            RenderRemainingText = "Đang ước tính thời gian chờ...";
+            _renderStopwatch = Stopwatch.StartNew();
 
             try
             {
-                Model3DGroup newModelGroup = null;
+                GroupModel3D newModelGroup = null;
 
-                // When running inside Revit, the preview must represent the real project.
-                // The old single-component generator remains below as a safe design-time fallback.
+                // Inside Revit, show the native project View3D. Helix remains only as an
+                // offline/design-time fallback when there is no Revit document.
                 if (_sharedViewModel.RevitDoc != null)
                 {
                     try
                     {
-                        var projectBuilder = new ProjectFormworkPreviewBuilder(_sharedViewModel);
-                        newModelGroup = projectBuilder.Build(out string summary);
-                        if (newModelGroup != null && newModelGroup.Children.Count > 0)
-                        {
-                            RenderSummary = summary;
-                            ModelGroup = newModelGroup;
-                            _hasProjectModel = true;
-                            return;
-                        }
+                        // Revit PreviewControl is a heavyweight native host. Release the
+                        // shared 2D instance (and any previous 3D instance) before creating
+                        // this view so only one native control owns the document at a time.
+                        FrameworkElement oldNativePreview = NativePreviewControl;
+                        NativePreviewControl = null;
+                        if (oldNativePreview is IDisposable oldPreview) oldPreview.Dispose();
+                        _sharedViewModel.DisposePreviewControl();
+
+                        bool detailedAccessories = _sharedViewModel.UseDetailed3DPreview;
+                        RenderProgressText = detailedAccessories
+                            ? "Đang dựng Family phụ kiện chi tiết..."
+                            : "Đang dựng preview nhanh: mô hình Revit, ván khuôn và phụ kiện...";
+                        var service = new NativeRevitFormworkPreviewService();
+                        NativeRevitFormworkPreviewService.Result result = service.Build(
+                            _sharedViewModel.RevitDoc, _sharedViewModel.FloorElements, _sharedViewModel,
+                            detailedAccessories, ReportRenderProgress,
+                            () => _renderCancellationRequested);
+                        ReportRenderProgress(98, "Đang khởi tạo bộ điều khiển hiển thị Revit...");
+                        NativePreviewControl = new PreviewControl(_sharedViewModel.RevitDoc, result.ViewId);
+                        RenderSummary = result.Summary;
+                        _hasProjectModel = true;
+                        ReportRenderProgress(100, "Hoàn tất mô hình 3D.");
+                        return;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        RenderSummary = "Đã hủy dựng mô hình 3D; không có phần tử preview nào được giữ lại.";
+                        RenderProgressText = "Đã hủy theo yêu cầu người dùng.";
+                        RenderRemainingText = string.Empty;
+                        _hasProjectModel = false;
+                        try { NativeRevitFormworkPreviewService.RemovePreviewArtifacts(_sharedViewModel.RevitDoc); }
+                        catch { }
+                        return;
                     }
                     catch (Exception projectEx)
                     {
-                        RenderSummary = "Không thể đọc toàn bộ dự án; đang dùng mô hình minh họa: " + projectEx.Message;
-                        System.Diagnostics.Debug.WriteLine($"Project preview failed: {projectEx}");
+                        RenderSummary = "Không thể tạo preview 3D Revit: " + projectEx.Message;
+                        RenderProgressText = "Không thể hoàn tất mô hình 3D.";
+                        RenderRemainingText = projectEx.Message;
+                        System.Diagnostics.Debug.WriteLine($"Native Revit preview failed: {projectEx}");
+                        return;
                     }
                 }
 
@@ -270,7 +375,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     );
                 }
 
-                ModelGroup = newModelGroup;
+                System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                    ModelGroup = newModelGroup;
+                });
             }
             catch (Exception ex)
             {
@@ -278,15 +385,47 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
             finally
             {
+                _renderStopwatch?.Stop();
                 IsRendering = false;
             }
+        }
+
+        private void CancelRender()
+        {
+            if (!IsRendering) return;
+            _renderCancellationRequested = true;
+            RenderProgressText = "Đang hủy an toàn sau bước Revit hiện tại...";
+            RenderRemainingText = "Vui lòng chờ transaction hiện tại được hoàn tác.";
+        }
+
+        private void ReportRenderProgress(int percent, string message)
+        {
+            RenderProgress = percent;
+            RenderProgressText = message;
+            if (_renderStopwatch != null && percent > 2 && percent < 100)
+            {
+                double elapsedSeconds = Math.Max(0.1, _renderStopwatch.Elapsed.TotalSeconds);
+                double remainingSeconds = elapsedSeconds * (100.0 - percent) / percent;
+                TimeSpan remaining = TimeSpan.FromSeconds(Math.Min(remainingSeconds, 24 * 60 * 60));
+                RenderRemainingText = remaining.TotalMinutes >= 1
+                    ? $"Ước tính còn khoảng {Math.Ceiling(remaining.TotalMinutes):F0} phút"
+                    : $"Ước tính còn khoảng {Math.Max(1, Math.Ceiling(remaining.TotalSeconds)):F0} giây";
+            }
+            else if (percent >= 100)
+            {
+                RenderRemainingText = $"Hoàn tất trong {_renderStopwatch?.Elapsed.TotalSeconds:F1} giây";
+            }
+
+            // Never pump the WPF Dispatcher while a Revit Transaction may be open. A
+            // nested navigation/close callback would re-enter the API and corrupt the
+            // transaction. Quick mode is deliberately batched so it finishes promptly.
         }
 
         /// <summary>
         /// Optimized 3D model builder with LOD control and instanced geometry.
         /// Reduces triangle count by 60-80% while maintaining visual fidelity.
         /// </summary>
-        private Model3DGroup Build3DModel(
+        private GroupModel3D Build3DModel(
             double areaM2, double slabThickness, double plywoodThickness,
             double secJoistW, double secJoistH, double L1,
             double priJoistW, double priJoistH, double L2,
@@ -294,16 +433,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             List<List<System.Windows.Point>> polygons = null,
             bool isGroundLevel = false)
         {
-            var group = new Model3DGroup();
+            var group = new GroupModel3D();
 
             // Materials
-            var slabMaterial = MaterialHelper.CreateMaterial(Color.FromArgb(100, 200, 220, 240)); // Semi-transparent concrete
-            var plywoodMaterial = MaterialHelper.CreateMaterial(Color.FromRgb(210, 180, 140)); // Tan wood
-            var secJoistMaterial = MaterialHelper.CreateMaterial(Color.FromRgb(180, 150, 100)); // Darker wood
-            var priJoistMaterial = MaterialHelper.CreateMaterial(Color.FromRgb(150, 120, 80)); // Even darker wood
-            var shoreMaterial = MaterialHelper.CreateMaterial(Color.FromRgb(80, 130, 180)); // Steel blue
-            var bracingMaterial = MaterialHelper.CreateMaterial(Color.FromRgb(255, 200, 0)); // Warning yellow
-            var jackMaterial = MaterialHelper.CreateMaterial(Color.FromRgb(192, 192, 192)); // Silver/Steel
+            var slabMaterial = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(200/255f, 220/255f, 240/255f, 100/255f) }; // Semi-transparent concrete
+            var plywoodMaterial = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(210/255f, 180/255f, 140/255f, 1f) }; // Tan wood
+            var secJoistMaterial = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(180/255f, 150/255f, 100/255f, 1f) }; // Darker wood
+            var priJoistMaterial = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(150/255f, 120/255f, 80/255f, 1f) }; // Even darker wood
+            var shoreMaterial = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(80/255f, 130/255f, 180/255f, 1f) }; // Steel blue
+            var bracingMaterial = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(255/255f, 200/255f, 0/255f, 1f) }; // Warning yellow
+            var jackMaterial = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(192/255f, 192/255f, 192/255f, 1f) }; // Silver/Steel
 
             // 0. Update bounds to match actual slab polygon if available
             double viewLengthX = Math.Min(Math.Sqrt(areaM2) * 1000.0, 10000.0);
@@ -384,10 +523,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 slabBuilder.AddBox(new Point3D(viewLengthX / 2, viewLengthY / 2, zConcreteBottom + slabThickness / 2), viewLengthX, viewLengthY, slabThickness);
                 plywoodBuilder.AddBox(new Point3D(viewLengthX / 2, viewLengthY / 2, zPlywoodBottom + plywoodThickness / 2), viewLengthX, viewLengthY, plywoodThickness);
             }
-            group.Children.Add(new GeometryModel3D(slabBuilder.ToMesh(), slabMaterial));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = slabBuilder.ToMesh(), Material = slabMaterial });
             if (!isGroundLevel)
             {
-                group.Children.Add(new GeometryModel3D(plywoodBuilder.ToMesh(), plywoodMaterial));
+                group.Children.Add(new MeshGeometryModel3D { Geometry = plywoodBuilder.ToMesh(), Material = plywoodMaterial });
             }
 
             // 1.5. Side Formwork (Ván khuôn thành sàn) & Ground Anchoring
@@ -468,11 +607,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 sideFormBuilder.AddBox(new Point3D(viewLengthX / 2, -sideFormThick / 2, zConcreteBottom + slabThickness / 2), viewLengthX, sideFormThick, slabThickness + sideFormThick);
                 sideFormBuilder.AddBox(new Point3D(viewLengthX / 2, viewLengthY + sideFormThick / 2, zConcreteBottom + slabThickness / 2), viewLengthX, sideFormThick, slabThickness + sideFormThick);
             }
-            group.Children.Add(new GeometryModel3D(sideFormBuilder.ToMesh(), plywoodMaterial));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = sideFormBuilder.ToMesh(), Material = plywoodMaterial });
 
             if (isGroundLevel)
             {
-                group.Children.Add(new GeometryModel3D(groundAnchorBuilder.ToMesh(), bracingMaterial));
+                group.Children.Add(new MeshGeometryModel3D { Geometry = groundAnchorBuilder.ToMesh(), Material = bracingMaterial });
             }
             else
             {
@@ -508,7 +647,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     secJoistBuilder.AddBox(new Point3D(xPos, viewLengthY / 2, zSecJoistBottom + secJoistH / 2), secJoistW, viewLengthY, secJoistH);
                 }
             }
-            group.Children.Add(new GeometryModel3D(secJoistBuilder.ToMesh(), secJoistMaterial));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = secJoistBuilder.ToMesh(), Material = secJoistMaterial });
 
             // 4. Primary Joists (Run along X axis, spaced along Y axis by L2)
             var priJoistBuilder = new SimpleMeshBuilder();
@@ -542,7 +681,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     priJoistBuilder.AddBox(new Point3D(viewLengthX / 2, yPos, zPriJoistBottom + priJoistH / 2), viewLengthX, priJoistW, priJoistH);
                 }
             }
-            group.Children.Add(new GeometryModel3D(priJoistBuilder.ToMesh(), priJoistMaterial));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = priJoistBuilder.ToMesh(), Material = priJoistMaterial });
 
             // 5. Vertical Shores, Base Jacks, and U-Heads (Spaced by L3 along X axis under Primary Joists)
             var shoreBuilder = new SimpleMeshBuilder();
@@ -610,28 +749,28 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 }
             }
             
-            group.Children.Add(new GeometryModel3D(shoreBuilder.ToMesh(), shoreMaterial));
-            group.Children.Add(new GeometryModel3D(bracingBuilder.ToMesh(), bracingMaterial));
-            group.Children.Add(new GeometryModel3D(jackBuilder.ToMesh(), jackMaterial));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = shoreBuilder.ToMesh(), Material = shoreMaterial });
+            group.Children.Add(new MeshGeometryModel3D { Geometry = bracingBuilder.ToMesh(), Material = bracingMaterial });
+            group.Children.Add(new MeshGeometryModel3D { Geometry = jackBuilder.ToMesh(), Material = jackMaterial });
             } // End if (!isGroundLevel)
 
             return group;
         }
 
-        private Model3DGroup BuildBeam3DModel(
+        private GroupModel3D BuildBeam3DModel(
             double beamW, double beamD, double beamL,
             double sidePlyThick, double botPlyThick,
             double sideYokeSpace, double botYokeSpace,
             double propSpace, double propDia, double propHeight,
             bool isGroundLevel)
         {
-            var group = new Model3DGroup();
+            var group = new GroupModel3D();
 
-            var concreteMat = MaterialHelper.CreateMaterial(Color.FromArgb(100, 200, 220, 240));
-            var plyMat = MaterialHelper.CreateMaterial(Color.FromRgb(210, 180, 140));
-            var yokeMat = MaterialHelper.CreateMaterial(Color.FromRgb(150, 120, 80));
-            var steelMat = MaterialHelper.CreateMaterial(Color.FromRgb(80, 130, 180));
-            var jackMat = MaterialHelper.CreateMaterial(Color.FromRgb(192, 192, 192));
+            var concreteMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(200/255f, 220/255f, 240/255f, 100/255f) };
+            var plyMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(210/255f, 180/255f, 140/255f, 1f) };
+            var yokeMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(150/255f, 120/255f, 80/255f, 1f) };
+            var steelMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(80/255f, 130/255f, 180/255f, 1f) };
+            var jackMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(192/255f, 192/255f, 192/255f, 1f) };
 
             double uHeadHeight = 150.0;
             double jackHeight = 150.0;
@@ -650,7 +789,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             // 1. Concrete Beam
             var concreteBuilder = new SimpleMeshBuilder();
             concreteBuilder.AddBox(new Point3D(beamL / 2, 0, zConcreteBottom + beamD / 2), beamL, beamW, beamD);
-            group.Children.Add(new GeometryModel3D(concreteBuilder.ToMesh(), concreteMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = concreteBuilder.ToMesh(), Material = concreteMat });
 
             // 2. Plywood
             var plyBuilder = new SimpleMeshBuilder();
@@ -659,7 +798,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             // Side plywoods
             plyBuilder.AddBox(new Point3D(beamL / 2, beamW / 2 + sidePlyThick / 2, zConcreteBottom + beamD / 2), beamL, sidePlyThick, beamD);
             plyBuilder.AddBox(new Point3D(beamL / 2, -beamW / 2 - sidePlyThick / 2, zConcreteBottom + beamD / 2), beamL, sidePlyThick, beamD);
-            group.Children.Add(new GeometryModel3D(plyBuilder.ToMesh(), plyMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = plyBuilder.ToMesh(), Material = plyMat });
 
             // 3. Yokes
             var yokeBuilder = new SimpleMeshBuilder();
@@ -678,7 +817,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 // Right side
                 yokeBuilder.AddBox(new Point3D(x, -beamW / 2 - sidePlyThick - sideYokeH / 2, zBotPlywoodBottom + beamD / 2), sideYokeW, sideYokeH, beamD + botPlyThick);
             }
-            group.Children.Add(new GeometryModel3D(yokeBuilder.ToMesh(), yokeMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = yokeBuilder.ToMesh(), Material = yokeMat });
 
             // Standalone beam preview: surface-fixed rods are shown only when the
             // selected arrangement is explicitly a perimeter beam (mode 2).
@@ -697,7 +836,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     surfaceTieBuilder.AddBox(inside, 110.0, 110.0, 10.0);
                     surfaceTieBuilder.AddBox(outside, 70.0, 12.0, 12.0);
                 }
-                group.Children.Add(new GeometryModel3D(surfaceTieBuilder.ToMesh(), steelMat));
+                group.Children.Add(new MeshGeometryModel3D { Geometry = surfaceTieBuilder.ToMesh(), Material = steelMat });
             }
 
             // 4. Props
@@ -719,27 +858,27 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     jackBuilder.AddBox(new Point3D(x, -botYokeW / 2 - 5, zBotYokeBottom + 50), botYokeW + 10, 10, 100);
                 }
                 
-                group.Children.Add(new GeometryModel3D(shoreBuilder.ToMesh(), steelMat));
-                group.Children.Add(new GeometryModel3D(jackBuilder.ToMesh(), jackMat));
+                group.Children.Add(new MeshGeometryModel3D { Geometry = shoreBuilder.ToMesh(), Material = steelMat });
+                group.Children.Add(new MeshGeometryModel3D { Geometry = jackBuilder.ToMesh(), Material = jackMat });
             }
 
             return group;
         }
 
-        private Model3DGroup BuildColumn3DModel(
+        private GroupModel3D BuildColumn3DModel(
             double colW, double colD, double colH,
             double plyThick, double yokeSpace)
         {
-            var group = new Model3DGroup();
+            var group = new GroupModel3D();
 
-            var concreteMat = MaterialHelper.CreateMaterial(Color.FromArgb(100, 200, 220, 240));
-            var plyMat = MaterialHelper.CreateMaterial(Color.FromRgb(210, 180, 140));
-            var steelMat = MaterialHelper.CreateMaterial(Color.FromRgb(80, 130, 180));
+            var concreteMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(200/255f, 220/255f, 240/255f, 100/255f) };
+            var plyMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(210/255f, 180/255f, 140/255f, 1f) };
+            var steelMat = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(80/255f, 130/255f, 180/255f, 1f) };
 
             // 1. Concrete Column
             var concreteBuilder = new SimpleMeshBuilder();
             concreteBuilder.AddBox(new Point3D(0, 0, colH / 2), colW, colD, colH);
-            group.Children.Add(new GeometryModel3D(concreteBuilder.ToMesh(), concreteMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = concreteBuilder.ToMesh(), Material = concreteMat });
 
             // 2. Plywood
             var plyBuilder = new SimpleMeshBuilder();
@@ -749,7 +888,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             // Left/Right sides (X)
             plyBuilder.AddBox(new Point3D(colW / 2 + plyThick / 2, 0, colH / 2), plyThick, colD, colH);
             plyBuilder.AddBox(new Point3D(-colW / 2 - plyThick / 2, 0, colH / 2), plyThick, colD, colH);
-            group.Children.Add(new GeometryModel3D(plyBuilder.ToMesh(), plyMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = plyBuilder.ToMesh(), Material = plyMat });
 
             // 3. Vertical 40x40 stiffeners fixed to the plywood panels.
             var stiffenerBuilder = new SimpleMeshBuilder();
@@ -766,7 +905,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 stiffenerBuilder.AddBox(new Point3D(colW / 2 + plyThick + stiffD / 2, y, colH / 2), stiffD, stiffW, colH);
                 stiffenerBuilder.AddBox(new Point3D(-colW / 2 - plyThick - stiffD / 2, y, colH / 2), stiffD, stiffW, colH);
             }
-            group.Children.Add(new GeometryModel3D(stiffenerBuilder.ToMesh(), plyMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = stiffenerBuilder.ToMesh(), Material = plyMat });
 
             // 4. Double rectangular-tube yokes, threaded ties and wing nuts.
             var yokeBuilder = new SimpleMeshBuilder();
@@ -813,7 +952,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     yokeBuilder.AddBox(new Point3D(-rodX, yOffset, z), 12, 70, 12);
                 }
             }
-            group.Children.Add(new GeometryModel3D(yokeBuilder.ToMesh(), steelMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = yokeBuilder.ToMesh(), Material = steelMat });
 
             // 5. Four adjustable push-pull props with base plates; optional cable/turnbuckle.
             var braceBuilder = new SimpleMeshBuilder();
@@ -849,7 +988,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 Vector3D cable = cableTop - cableFoot;
                 braceBuilder.AddCylinder(cableFoot + cable * 0.43, cableFoot + cable * 0.57, 28, 8);
             }
-            group.Children.Add(new GeometryModel3D(braceBuilder.ToMesh(), steelMat));
+            group.Children.Add(new MeshGeometryModel3D { Geometry = braceBuilder.ToMesh(), Material = steelMat });
 
             return group;
         }
@@ -974,6 +1113,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
         public void Dispose()
         {
+            ReleaseProjectModel();
             if (_sharedViewModel != null)
             {
                 _sharedViewModel.PropertyChanged -= SharedViewModel_PropertyChanged;
@@ -1043,11 +1183,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private readonly Dictionary<(long X, long Y, long Z), int> _projectVertexIndices
             = new Dictionary<(long X, long Y, long Z), int>();
 
-        public MeshGeometry3D Mesh { get; } = new MeshGeometry3D()
+        public HelixToolkit.SharpDX.MeshGeometry3D Mesh { get; } = new HelixToolkit.SharpDX.MeshGeometry3D()
         {
-            Positions = new Point3DCollection(),
-            TriangleIndices = new Int32Collection()
+            Positions = new HelixToolkit.Vector3Collection(),
+            TriangleIndices = new HelixToolkit.IntCollection()
         };
+        private void AddPosV3(Point3D p) => Mesh.Positions.Add(new System.Numerics.Vector3((float)p.X, (float)p.Y, (float)p.Z));
 
         public void AddBox(Point3D center, double xLength, double yLength, double zLength)
         {
@@ -1069,7 +1210,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 new Point3D(center.X - w, center.Y + l, center.Z - h)
             };
 
-            foreach (var pt in p) Mesh.Positions.Add(pt);
+            foreach (var pt in p) AddPosV3(pt);
 
             int[] indices = new int[]
             {
@@ -1102,7 +1243,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
             if (_projectVertexIndices.TryGetValue(key, out int index)) return index;
             index = Mesh.Positions.Count;
-            Mesh.Positions.Add(point);
+            AddPosV3(point);
             _projectVertexIndices.Add(key, index);
             return index;
         }
@@ -1139,7 +1280,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             };
 
             int startIndex = Mesh.Positions.Count;
-            foreach (Point3D point in p) Mesh.Positions.Add(point);
+            foreach (Point3D point in p) AddPosV3(point);
 
             int[] indices =
             {
@@ -1176,8 +1317,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 double theta = 2.0 * Math.PI * i / thetaDiv;
                 Vector3D offset = r * Math.Cos(theta) * u + r * Math.Sin(theta) * v;
-                Mesh.Positions.Add(p1 + offset);
-                Mesh.Positions.Add(p2 + offset);
+                AddPosV3(p1 + offset);
+                AddPosV3(p2 + offset);
             }
 
             for (int i = 0; i < thetaDiv; i++)
@@ -1217,7 +1358,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             pts[7] = p1 + n * (thickness / 2) + new Vector3D(0, 0, zBottom);
 
             int startIndex = Mesh.Positions.Count;
-            foreach (var pt in pts) Mesh.Positions.Add(pt);
+            foreach (var pt in pts) AddPosV3(pt);
 
             int[] indices = new int[]
             {
@@ -1280,9 +1421,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
             // 3. Add 3D positions: top face vertices then bottom face vertices
             foreach (var p in pts2D)
-                Mesh.Positions.Add(new Point3D(p.X, p.Y, zTop));
+                AddPosV3(new Point3D(p.X, p.Y, zTop));
             foreach (var p in pts2D)
-                Mesh.Positions.Add(new Point3D(p.X, p.Y, zBottom));
+                AddPosV3(new Point3D(p.X, p.Y, zBottom));
 
             // 4. Top face triangles (CCW when viewed from above = outward normal +Z)
             for (int i = 0; i < triIndices.Count; i += 3)
@@ -1311,10 +1452,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
                     // 4 corner vertices for this side quad
                     int si = Mesh.Positions.Count;
-                    Mesh.Positions.Add(new Point3D(pA.X, pA.Y, zTop));    // 0: top-A
-                    Mesh.Positions.Add(new Point3D(pB.X, pB.Y, zTop));    // 1: top-B
-                    Mesh.Positions.Add(new Point3D(pB.X, pB.Y, zBottom)); // 2: bot-B
-                    Mesh.Positions.Add(new Point3D(pA.X, pA.Y, zBottom)); // 3: bot-A
+                    AddPosV3(new Point3D(pA.X, pA.Y, zTop));    // 0: top-A
+                    AddPosV3(new Point3D(pB.X, pB.Y, zTop));    // 1: top-B
+                    AddPosV3(new Point3D(pB.X, pB.Y, zBottom)); // 2: bot-B
+                    AddPosV3(new Point3D(pA.X, pA.Y, zBottom)); // 3: bot-A
 
                     // Two triangles forming the quad (outward normal faces away from polygon interior)
                     Mesh.TriangleIndices.Add(si + 0);
@@ -1335,7 +1476,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
         }
 
-        public MeshGeometry3D ToMesh() => Mesh;
+        public HelixToolkit.SharpDX.MeshGeometry3D ToMesh() => Mesh;
     }
 
     /// <summary>

@@ -25,6 +25,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public double Joist2Spacing { get; set; }
         public double SupportSpacing { get; set; }
         public int FloorCount { get; set; }
+        public int ComponentCount { get; set; }
+        public int SlabCount { get; set; }
+        public int FoundationCount { get; set; }
+        public int BeamCount { get; set; }
+        public int ColumnCount { get; set; }
         public string MaxFloorName { get; set; }
         public List<List<System.Windows.Point>> SlabPolygons { get; set; }
     }
@@ -191,8 +196,23 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private string _revitVersionStatus;
         private List<KetQuaHienThi> _checkResults;
         public Action<string> NavigateAction { get; private set; }
-        private readonly Action _anSoCuaSo;
+        private Action _closeWindowAction;
+
+        /// <summary>
+        /// False is the default, responsive preview (native structure + formwork).
+        /// True is requested only by the explicit "Dựng Family chi tiết" action.
+        /// </summary>
+        public bool UseDetailed3DPreview { get; private set; }
         private readonly IDialogService _dialogService;
+        private readonly FormworkTakeoffWorkflowService _takeoffWorkflowService =
+            new FormworkTakeoffWorkflowService();
+        private string _takeoffWorkflowStatus = "Sẵn sàng thực hiện quy trình bóc tách khối lượng ván khuôn.";
+
+        public string TakeoffWorkflowStatus
+        {
+            get => _takeoffWorkflowStatus;
+            private set { _takeoffWorkflowStatus = value; OnPropertyChanged(); }
+        }
 
         // Versioned, validated formwork/accessory design shared by Calculation,
         // Schedule and Preview. Structural Revit dimensions are not committed here.
@@ -206,6 +226,23 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             new Dictionary<string, ComponentFormworkDesign>(StringComparer.OrdinalIgnoreCase);
 
         public bool HasValidatedDesign => _validatedDesignParameters != null;
+        public int SelectedComponentCount => FloorElements?.Count ?? 0;
+        public bool IsScheduleSynchronized => HasValidatedDesign &&
+                                              _scheduledDesignRevision == _validatedDesignRevision;
+        public string CurrentWorkflowTab { get; private set; } = "DuLieuView";
+        public string WorkflowStatusText
+        {
+            get
+            {
+                if (SelectedComponentCount == 0)
+                    return "Bước 1/5: Chọn cấu kiện Revit; hệ thống sẽ nhóm theo tầng, loại và tên cấu kiện.";
+                if (!HasValidatedDesign)
+                    return $"Đã nạp {SelectedComponentCount} cấu kiện. Tiếp theo: khai báo thông số và tính toán/thiết kế đạt chuẩn.";
+                if (!IsScheduleSynchronized)
+                    return $"Thiết kế đạt chuẩn phiên bản {_validatedDesignRevision} đã được lưu. Mở Thống kê để đồng bộ tiên lượng.";
+                return $"Quy trình đã đồng bộ: {SelectedComponentCount} cấu kiện · thiết kế phiên bản {_validatedDesignRevision} · sẵn sàng thống kê hoặc diễn họa 3D.";
+            }
+        }
         public bool IsApplyingValidatedDesign => _isApplyingValidatedDesign;
         public int ValidatedDesignRevision => _validatedDesignRevision;
         public int ScheduledDesignRevision => _scheduledDesignRevision;
@@ -321,7 +358,17 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         /// </summary>
         public void RequestRender3D()
         {
+            UseDetailed3DPreview = true;
+            OnPropertyChanged(nameof(UseDetailed3DPreview));
             SynchronizeScheduleFromValidatedDesign();
+            ExecuteChangeTab("Preview3DView");
+            Render3DRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void RequestFastPreview3D()
+        {
+            UseDetailed3DPreview = false;
+            OnPropertyChanged(nameof(UseDetailed3DPreview));
             ExecuteChangeTab("Preview3DView");
             Render3DRequested?.Invoke(this, EventArgs.Empty);
         }
@@ -344,12 +391,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 _isApplyingValidatedDesign = false;
             }
-
             OnPropertyChanged(nameof(HasValidatedDesign));
             OnPropertyChanged(nameof(ValidatedDesignParameters));
             OnPropertyChanged(nameof(ValidatedDesignAdjustments));
             OnPropertyChanged(nameof(ValidatedDesignTimestamp));
             OnPropertyChanged(nameof(ValidatedDesignRevision));
+            NotifyWorkflowStateChanged();
             IsCalculated = true;
         }
 
@@ -387,6 +434,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             OnPropertyChanged(nameof(ValidatedDesignAdjustments));
             OnPropertyChanged(nameof(ValidatedDesignTimestamp));
             OnPropertyChanged(nameof(ValidatedDesignRevision));
+            NotifyWorkflowStateChanged();
             IsCalculated = true;
         }
 
@@ -397,6 +445,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
             _scheduledDesignRevision = _validatedDesignRevision;
             OnPropertyChanged(nameof(ScheduledDesignRevision));
+            NotifyWorkflowStateChanged();
             return true;
         }
 
@@ -470,6 +519,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 _isApplyingValidatedDesign = false;
             }
+            NotifyWorkflowStateChanged();
         }
 
         private void ApplyAccessoryDesign(CalculationParameters p)
@@ -1038,6 +1088,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 _floorElements = value ?? new List<FloorElementModel>();
                 RefreshComponentIntersections();
                 OnPropertyChanged();
+                NotifyWorkflowStateChanged();
             }
         }
 
@@ -1081,7 +1132,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public SharedDataViewModel(IDialogService dialogService, Action anSoCuaSo = null)
         {
             _dialogService = dialogService ?? new MessageBoxDialogService();
-            _anSoCuaSo = anSoCuaSo;
+            _closeWindowAction = anSoCuaSo;
 
             LoadDefaults();
 
@@ -1094,8 +1145,21 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             SweepSelectComponentCommand = new RelayCommand(o => ExecuteSweepSelectComponent());
             ShowFloorDetailsCommand = new RelayCommand(ExecuteShowFloorDetails);
             SelectGroundFloorCommand = new RelayCommand(o => ExecuteSelectGroundFloor());
+            JoinByConstructionSequenceCommand = new RelayCommand(o => ExecuteJoinByConstructionSequence());
+            NameFormworkComponentsCommand = new RelayCommand(o => ExecuteNameFormworkComponents());
+            LoadFormworkSharedParametersCommand = new RelayCommand(o => ExecuteLoadFormworkSharedParameters());
+            InitializeFormworkCalculationCommand = new RelayCommand(o => ExecuteInitializeFormworkCalculation());
+            CreateFormworkSchedulesCommand = new RelayCommand(o => ExecuteCreateFormworkSchedules());
+            ExtractFormworkAreasCommand = new RelayCommand(o => ExecuteExtractFormworkAreas());
+            RunFullTakeoffWorkflowCommand = new RelayCommand(o => ExecuteFullTakeoffWorkflow());
+            OpenFastPreviewCommand = new RelayCommand(o => RequestFastPreview3D());
 
             ExecuteUpdateResults(false);
+        }
+
+        public void SetCloseWindowAction(Action closeWindowAction)
+        {
+            _closeWindowAction = closeWindowAction;
         }
 
         public void LoadDefaults()
@@ -1193,12 +1257,23 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 OnPropertyChanged(nameof(ValidatedDesignTimestamp));
                 OnPropertyChanged(nameof(ValidatedDesignRevision));
                 OnPropertyChanged(nameof(ScheduledDesignRevision));
+                NotifyWorkflowStateChanged();
             }
         }
 
         public void ExecuteChangeTab(object parameter)
         {
             string tabName = parameter?.ToString();
+            if (string.IsNullOrWhiteSpace(tabName)) return;
+
+            // The quantity schedule consumes the latest committed design revision directly.
+            // 3D visualization remains optional and is never a prerequisite for takeoff.
+            if (tabName == "KetQuaView" && HasValidatedDesign)
+                SynchronizeScheduleFromValidatedDesign();
+
+            CurrentWorkflowTab = tabName;
+            OnPropertyChanged(nameof(CurrentWorkflowTab));
+            NotifyWorkflowStateChanged();
             
             if ((tabName == "DuLieuView" || tabName == "TinhToanView" || tabName == "Report" || tabName == "KetQuaView") && SharedPreviewControl == null && RevitDoc != null)
             {
@@ -1232,6 +1307,13 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
 
             NavigateAction?.Invoke(tabName);
+        }
+
+        private void NotifyWorkflowStateChanged()
+        {
+            OnPropertyChanged(nameof(SelectedComponentCount));
+            OnPropertyChanged(nameof(IsScheduleSynchronized));
+            OnPropertyChanged(nameof(WorkflowStatusText));
         }
 
         public void InitializeRevitContext(Document doc, UIDocument uiDoc, Action<string> navigateAction)
@@ -1293,13 +1375,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
         public void DisposePreviewControl()
         {
-            if (SharedPreviewControl is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-            SharedPreviewControl = null;
+            // Detach the single native PreviewControl from every WPF ContentControl before
+            // disposing it. Autodesk permits only one active PreviewControl, and disposing
+            // a still-parented native host can terminate Revit instead of throwing .NET.
+            System.Windows.FrameworkElement oldPreview = SharedPreviewControl;
             KetQuaPreviewControl = null;
             TinhToanPreviewControl = null;
+            DuLieuPreviewControl = null;
+            SharedPreviewControl = null;
+            if (oldPreview is IDisposable disposable)
+                disposable.Dispose();
         }
 
         public string RevitVersionStatus
@@ -1323,6 +1408,228 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public ICommand SweepSelectComponentCommand { get; }
         public ICommand ShowFloorDetailsCommand { get; }
         public ICommand SelectGroundFloorCommand { get; }
+        public ICommand JoinByConstructionSequenceCommand { get; }
+        public ICommand NameFormworkComponentsCommand { get; }
+        public ICommand LoadFormworkSharedParametersCommand { get; }
+        public ICommand InitializeFormworkCalculationCommand { get; }
+        public ICommand CreateFormworkSchedulesCommand { get; }
+        public ICommand ExtractFormworkAreasCommand { get; }
+        public ICommand RunFullTakeoffWorkflowCommand { get; }
+        public ICommand OpenFastPreviewCommand { get; }
+
+        private void ExecuteJoinByConstructionSequence()
+        {
+            ExecuteWorkflowStep("JOIN cấu kiện theo trình tự thi công",
+                () => _takeoffWorkflowService.JoinByConstructionSequence(RevitDoc, FloorElements), true);
+        }
+
+        private void ExecuteNameFormworkComponents()
+        {
+            ExecuteWorkflowStep("Đặt tên cấu kiện",
+                () => _takeoffWorkflowService.NameComponents(RevitDoc, FloorElements), true);
+        }
+
+        private void ExecuteLoadFormworkSharedParameters()
+        {
+            ExecuteWorkflowStep("Load Shared Parameters",
+                () => _takeoffWorkflowService.EnsureSharedParameters(RevitDoc));
+        }
+
+        private void ExecuteInitializeFormworkCalculation()
+        {
+            try
+            {
+                EnsureTakeoffSelection();
+                RefreshComponentIntersections();
+                ExecuteUpdateResults(false);
+                IsCalculated = true;
+                TakeoffWorkflowStatus = "Đã khởi tạo dữ liệu tính toán ván khuôn từ hình học ròng của các cấu kiện.";
+                RevitVersionStatus = TakeoffWorkflowStatus;
+                ExecuteChangeTab("TinhToanView");
+            }
+            catch (Exception ex)
+            {
+                TakeoffWorkflowStatus = "Lỗi khởi tạo tính toán: " + ex.Message;
+                _dialogService.ShowWarning(TakeoffWorkflowStatus, "Quy trình bóc tách ván khuôn");
+            }
+        }
+
+        private void ExecuteCreateFormworkSchedules()
+        {
+            ExecuteWorkflowStep("Tạo lập bảng thống kê",
+                () => _takeoffWorkflowService.CreateSchedules(RevitDoc));
+        }
+
+        private void ExecuteExtractFormworkAreas()
+        {
+            try
+            {
+                EnsureTakeoffSelection();
+                RefreshComponentIntersections();
+                FormworkWorkflowResult result = _takeoffWorkflowService.PublishAreas(RevitDoc, FloorElements,
+                    GetComponentFormworkDesign, ValidatedDesignRevision);
+                RefreshWorkflowModels();
+                TakeoffWorkflowStatus = result.Summary;
+                RevitVersionStatus = result.Summary;
+                _dialogService.ShowInfo(result.Summary, "Trích xuất diện tích ván khuôn");
+            }
+            catch (Exception ex)
+            {
+                TakeoffWorkflowStatus = "Lỗi trích xuất diện tích: " + ex.Message;
+                _dialogService.ShowWarning(TakeoffWorkflowStatus, "Quy trình bóc tách ván khuôn");
+            }
+        }
+
+        private void ExecuteFullTakeoffWorkflow()
+        {
+            try
+            {
+                if (FloorElements == null || FloorElements.Count == 0)
+                {
+                    TakeoffWorkflowStatus = "Đang tự động quét toàn bộ cấu kiện kết cấu trong dự án Revit...";
+                    LoadAllProjectComponentsForTakeoff();
+                }
+                EnsureTakeoffSelection();
+                var summaries = new List<string>();
+                summaries.Add(_takeoffWorkflowService.JoinByConstructionSequence(RevitDoc, FloorElements).Summary);
+                summaries.Add(_takeoffWorkflowService.NameComponents(RevitDoc, FloorElements).Summary);
+                summaries.Add(_takeoffWorkflowService.EnsureSharedParameters(RevitDoc).Summary);
+                RefreshComponentIntersections();
+                ExecuteUpdateResults(false);
+                IsCalculated = true;
+                summaries.Add("Đã khởi tạo phép tính từ tải trọng, hình học và diện tích ròng.");
+                summaries.Add(_takeoffWorkflowService.CreateSchedules(RevitDoc).Summary);
+                summaries.Add(_takeoffWorkflowService.PublishAreas(RevitDoc, FloorElements,
+                    GetComponentFormworkDesign, ValidatedDesignRevision).Summary);
+                RefreshWorkflowModels();
+                TakeoffWorkflowStatus = "Đã hoàn thành 6 bước bóc tách khối lượng ván khuôn.";
+                RevitVersionStatus = TakeoffWorkflowStatus;
+                _dialogService.ShowInfo(TakeoffWorkflowStatus + "\n\n• " + string.Join("\n• ", summaries),
+                    "Bóc tách khối lượng ván khuôn");
+            }
+            catch (Exception ex)
+            {
+                TakeoffWorkflowStatus = "Quy trình dừng tại bước lỗi: " + ex.Message;
+                _dialogService.ShowWarning(TakeoffWorkflowStatus, "Bóc tách khối lượng ván khuôn");
+            }
+        }
+
+        /// <summary>
+        /// The full-project command is self-contained: when the user has not made a manual
+        /// selection it collects every supported structural instance from the active model.
+        /// Manual selection remains available for running the six steps on a limited scope.
+        /// </summary>
+        private void LoadAllProjectComponentsForTakeoff()
+        {
+            if (RevitDoc == null) throw new InvalidOperationException("Không có tài liệu Revit đang hoạt động.");
+
+            var categories = new[]
+            {
+                BuiltInCategory.OST_Floors,
+                BuiltInCategory.OST_StructuralFraming,
+                BuiltInCategory.OST_StructuralColumns,
+                BuiltInCategory.OST_StructuralFoundation
+            };
+            List<Element> elements = new FilteredElementCollector(RevitDoc)
+                .WherePasses(new ElementMulticategoryFilter(categories))
+                .WhereElementIsNotElementType()
+                .ToElements()
+                .Where(element => element?.Category != null)
+                .ToList();
+
+            var slabs = new List<Reference>();
+            var foundations = new List<Reference>();
+            var beams = new List<Reference>();
+            var columns = new List<Reference>();
+            foreach (Element element in elements)
+            {
+                BuiltInCategory category = element.Category.BuiltInCategory;
+                if (category == BuiltInCategory.OST_StructuralFoundation)
+                {
+                    foundations.Add(new Reference(element));
+                }
+                else if (category == BuiltInCategory.OST_Floors)
+                {
+                    bool foundationSlab = element is Floor floor &&
+                                          RevitDoc.GetElement(floor.GetTypeId()) is FloorType floorType &&
+                                          floorType.IsFoundationSlab;
+                    (foundationSlab ? foundations : slabs).Add(new Reference(element));
+                }
+                else if (category == BuiltInCategory.OST_StructuralFraming)
+                {
+                    beams.Add(new Reference(element));
+                }
+                else if (category == BuiltInCategory.OST_StructuralColumns)
+                {
+                    columns.Add(new Reference(element));
+                }
+            }
+
+            bool append = false;
+            if (foundations.Count > 0)
+            {
+                ProcessSelectedSlab(foundations, showDialog: false, isFoundation: true, appendSelection: append);
+                append = true;
+            }
+            if (slabs.Count > 0)
+            {
+                ProcessSelectedSlab(slabs, showDialog: false, isFoundation: false, appendSelection: append);
+                append = true;
+            }
+            if (beams.Count > 0)
+            {
+                ProcessSelectedBeam(beams, append);
+                append = true;
+            }
+            if (columns.Count > 0)
+            {
+                ProcessSelectedColumn(columns, append);
+            }
+
+            SetSelectedComponentComposition(slabs.Count, foundations.Count, beams.Count, columns.Count);
+            if (FloorElements == null || FloorElements.Count == 0)
+                throw new InvalidOperationException("Dự án không có Sàn, Dầm, Cột hoặc Móng phù hợp để bóc tách.");
+
+            TakeoffWorkflowStatus = $"Đã tự động nạp {FloorElements.Count} cấu kiện: " +
+                                    $"{slabs.Count} sàn · {foundations.Count} móng · " +
+                                    $"{beams.Count} dầm · {columns.Count} cột.";
+            RevitVersionStatus = TakeoffWorkflowStatus;
+        }
+
+        private void ExecuteWorkflowStep(string title, Func<FormworkWorkflowResult> action,
+            bool refreshModels = false)
+        {
+            try
+            {
+                EnsureTakeoffSelection();
+                FormworkWorkflowResult result = action();
+                if (refreshModels) RefreshWorkflowModels();
+                TakeoffWorkflowStatus = result.Summary;
+                RevitVersionStatus = result.Summary;
+                string warnings = result.Warnings.Count == 0
+                    ? string.Empty
+                    : "\n\nMột số trường hợp được bỏ qua:\n• " + string.Join("\n• ", result.Warnings);
+                _dialogService.ShowInfo(result.Summary + warnings, title);
+            }
+            catch (Exception ex)
+            {
+                TakeoffWorkflowStatus = $"{title}: {ex.Message}";
+                _dialogService.ShowWarning(TakeoffWorkflowStatus, "Quy trình bóc tách ván khuôn");
+            }
+        }
+
+        private void EnsureTakeoffSelection()
+        {
+            if (RevitDoc == null) throw new InvalidOperationException("Chức năng này chỉ chạy trong Revit.");
+            if (FloorElements == null || FloorElements.Count == 0)
+                throw new InvalidOperationException("Hãy chọn Sàn, Dầm, Cột hoặc Móng trước khi chạy quy trình.");
+        }
+
+        private void RefreshWorkflowModels()
+        {
+            FloorElements = (FloorElements ?? new List<FloorElementModel>()).ToList();
+            OnPropertyChanged(nameof(TakeoffWorkflowStatus));
+        }
 
         private void ExecuteUpdateResults(bool showWarning = false)
         {
@@ -1526,7 +1833,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             else IsSelectingSlab = true;
 
             StartupTab = "DuLieuView";
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         private void ExecuteSweepSelectSlab()
@@ -1542,7 +1849,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             else IsSweepSelectingSlab = true;
 
             StartupTab = "DuLieuView";
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         private void ExecuteSelectComponent()
@@ -1554,7 +1861,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
 
             IsSelectingComponent = true;
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         private void ExecuteSweepSelectComponent()
@@ -1566,7 +1873,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
 
             IsSweepSelectingComponent = true;
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         private void ExecuteSelectGroundFloor()
@@ -1587,7 +1894,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 }
                 
                 ExecuteUpdateResults(false);
-                Render3DRequested?.Invoke(this, EventArgs.Empty);
+                // Changing the designated ground level invalidates calculation/layout
+                // data only. Native Revit geometry is generated exclusively through
+                // RequestRender3D(), after an explicit user request.
             }
         }
 
@@ -1610,7 +1919,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (RevitUIDoc == null || RevitDoc == null) return;
             IsSelectingComponent = true;
             StartupTab = "KetQuaView";
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         public void ExecuteSweepSelectComponentFromKetQua()
@@ -1618,7 +1927,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (RevitUIDoc == null || RevitDoc == null) return;
             IsSweepSelectingComponent = true;
             StartupTab = "KetQuaView";
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         public void ExecuteSelectComponentFromTinhToan()
@@ -1626,7 +1935,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (RevitUIDoc == null || RevitDoc == null) return;
             IsSelectingComponent = true;
             StartupTab = "TinhToanView";
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         public void ExecuteSweepSelectComponentFromTinhToan()
@@ -1634,7 +1943,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (RevitUIDoc == null || RevitDoc == null) return;
             IsSweepSelectingComponent = true;
             StartupTab = "TinhToanView";
-            _anSoCuaSo?.Invoke();
+            _closeWindowAction?.Invoke();
         }
 
         private void StoreSelectedComponentModels(IEnumerable<FloorElementModel> models, bool appendSelection)
@@ -1654,6 +1963,43 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 .Select(group => group.Last())
                 .ToList();
             FloorElements = merged;
+        }
+
+        /// <summary>
+        /// Publishes the complete structural selection. The legacy event name is retained so
+        /// existing views remain binary compatible, but its payload is no longer slab-only.
+        /// </summary>
+        private void PublishComponentSelectionContext(string maxComponentName = null,
+            List<List<System.Windows.Point>> slabPolygons = null)
+        {
+            List<FloorElementModel> selected = (FloorElements ?? new List<FloorElementModel>())
+                .Where(item => item != null)
+                .GroupBy(item => string.IsNullOrWhiteSpace(item.UniqueId) ? item.ElementId : item.UniqueId,
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Last())
+                .ToList();
+
+            LatestSelectionContext = new SlabSelectionEventArgs
+            {
+                FloorElements = selected,
+                SlabThickness = SlabThickness,
+                SelectedSlabArea = selected.Where(item => item.ComponentType == StructuralComponentType.Slab)
+                    .Sum(item => item.Area),
+                SelectedSlabPerimeter = selected.Where(item => item.ComponentType == StructuralComponentType.Slab)
+                    .Sum(item => item.Perimeter),
+                Joist1Spacing = Joist1Spacing,
+                Joist2Spacing = Joist2Spacing,
+                SupportSpacing = SupportSpacing,
+                FloorCount = selected.Count,
+                ComponentCount = selected.Count,
+                SlabCount = selected.Count(item => item.ComponentType == StructuralComponentType.Slab),
+                FoundationCount = selected.Count(item => item.ComponentType == StructuralComponentType.Foundation),
+                BeamCount = selected.Count(item => item.ComponentType == StructuralComponentType.Beam),
+                ColumnCount = selected.Count(item => item.ComponentType == StructuralComponentType.Column),
+                MaxFloorName = maxComponentName ?? SelectedFloorDetailName,
+                SlabPolygons = slabPolygons ?? new List<List<System.Windows.Point>>()
+            };
+            SlabSelectionCompleted?.Invoke(this, LatestSelectionContext);
         }
 
         public void ProcessSelectedSlab(System.Collections.Generic.IList<Reference> references, bool showDialog = true,
@@ -1930,22 +2276,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 }
 
                 // Lưu trạng thái trước khi phát sự kiện
-                LatestSelectionContext = new SlabSelectionEventArgs
-                {
-                    FloorElements = floorModels,
-                    SlabThickness = SlabThickness,
-                    SelectedSlabArea = SelectedSlabArea,
-                    SelectedSlabPerimeter = SelectedSlabPerimeter,
-                    Joist1Spacing = Joist1Spacing,
-                    Joist2Spacing = Joist2Spacing,
-                    SupportSpacing = SupportSpacing,
-                    FloorCount = floorModels.Count,
-                    MaxFloorName = maxFloorName,
-                    SlabPolygons = allPolygons
-                };
-
-                // Phát sự kiện đồng bộ toàn bộ trang sau khi chọn sàn xong
-                SlabSelectionCompleted?.Invoke(this, LatestSelectionContext);
+                // Phát toàn bộ phạm vi cấu kiện, không chỉ riêng các sàn vừa xử lý.
+                PublishComponentSelectionContext(maxFloorName, allPolygons);
 
                 // Đánh dấu IsCalculated để TinhToan tự động recalculate
                 IsCalculated = true;
@@ -2329,6 +2661,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     IsCalculated = true;
                     ExecuteUpdateResults(false);
                 }
+                PublishComponentSelectionContext(maxFamilyName);
             }
         }
 
@@ -2420,6 +2753,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     IsCalculated = true;
                     ExecuteUpdateResults(false);
                 }
+                PublishComponentSelectionContext(maxFamilyName);
             }
         }
 

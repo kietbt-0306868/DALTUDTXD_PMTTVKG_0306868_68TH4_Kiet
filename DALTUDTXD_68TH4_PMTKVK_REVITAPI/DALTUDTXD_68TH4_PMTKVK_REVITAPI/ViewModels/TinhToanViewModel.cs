@@ -139,6 +139,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private bool _isApplyingAutoDesign;
         private bool _isRecalculating;
         private bool _disposed;
+        private string _activeCalculationComponentKey;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -159,6 +160,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             ShowFloorDetailsCommand = new RelayCommand(ExecuteShowFloorDetails);
             AutoFixPropsCommand = new RelayCommand(o => ExecuteAutoFixProps(), o => !_isApplyingAutoDesign);
 
+            FloorElements = (_SharedDataViewModel.FloorElements ?? new List<FloorElementModel>()).ToList();
             ExecuteRecalculate();
 
             if (_SharedDataViewModel.LatestSelectionContext != null)
@@ -304,16 +306,14 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
         private void ExecuteShowFloorDetails(object parameter)
         {
-            if (parameter is FloorElementModel floorModel)
+            if (parameter is FloorElementModel component)
             {
-                var floorModels = new List<FloorElementModel> { floorModel };
-                _SharedDataViewModel.FloorElements = floorModels;
-                _SharedDataViewModel.SelectedFloorDetailName = floorModel.FamilyTypeName;
-                _SharedDataViewModel.SlabThickness = floorModel.Thickness;
-                
+                _activeCalculationComponentKey = ComponentKey(component);
+                _SharedDataViewModel.CurrentComponentType = component.ComponentType;
+                _SharedDataViewModel.SelectedFloorDetailName = component.FamilyTypeName;
                 ExecuteRecalculate();
-                SelectedFloorInfo = $"Sàn: {floorModel.FamilyTypeName} (Dày: {floorModel.Thickness} mm | DT: {floorModel.Area:F1} m²)";
-                ExecuteShowMultipleFloorDetails(new List<string> { floorModel.UniqueId });
+                SelectedFloorInfo = $"{component.ComponentTypeLabel}: {component.FamilyTypeName} | {component.CalculationGeometrySummary}";
+                ExecuteShowMultipleFloorDetails(new List<string> { component.UniqueId });
             }
         }
 
@@ -363,6 +363,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             _isRecalculating = true;
             try
             {
+                EnsureActiveCalculationComponent();
                 ExecuteRecalculateCore();
             }
             finally
@@ -513,6 +514,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 checkColumn = CurrentComponentType == StructuralComponentType.Column;
             }
 
+            // The summary cards and construction/load narrative must use the same
+            // per-element geometry and override set as the detailed checks.
+            FloorElementModel focusedComponent = GetScopedComponents(
+                checkSlab, checkFoundation, checkBeam, checkColumn).FirstOrDefault();
+            if (focusedComponent != null)
+            {
+                p = _SharedDataViewModel.GetEffectiveComponentParameters(focusedComponent, p);
+                ApplyColumnBraceAssessment(focusedComponent, p);
+            }
+
             p.IsFloorSelected = checkSlab || checkFoundation;
             p.IsBeamSelected = checkBeam;
             p.IsColumnSelected = checkColumn;
@@ -545,7 +556,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             string groupBreakdown = string.Join(" · ", DetailedChecks
                 .GroupBy(check => check.Group)
                 .Select(group => $"{group.Key}: {group.Count()}"));
-            DetailedCheckSummary = $"{calculationSets.Count} nhóm ({groupBreakdown}) · {DetailedChecks.Count} phép kiểm tra · {failedDetailedChecks} mục không đạt · " +
+            DetailedCheckSummary = $"{calculationSets.Count} nhóm cấu kiện ({groupBreakdown}) · {DetailedChecks.Count} phép kiểm tra ứng suất, độ võng, ổn định và tải trọng · {failedDetailedChecks} mục không đạt · " +
                                    "hiển thị giá trị tính toán, giới hạn cho phép, mức sử dụng và công thức chi phối.";
 
             // 1. Card 1 (Ván mặt / Ván đáy / Ván mặt cột)
@@ -659,16 +670,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 SupportStatusTextColor = isCard4Ok ? "#065F46" : "#991B1B";
             }
 
-            bool isSystemOk = isCard1Ok && isCard2Ok && isCard3Ok && isCard4Ok &&
-                              calculationSets.All(set => set.Value.IsSystemOk);
+            bool isSystemOk = calculationSets.Count > 0 && isCard1Ok && isCard2Ok && isCard3Ok && isCard4Ok &&
+                               calculationSets.All(set => set.Value.IsSystemOk);
             string layoutSummary = "";
             if (CurrentComponentType == StructuralComponentType.Column)
             {
-                int stiffeners = 2 * ((int)Math.Ceiling(p.ColumnWidth / Math.Max(100.0, p.ColumnStiffenerSpacing)) + 1) +
-                                 2 * ((int)Math.Ceiling(p.ColumnDepth / Math.Max(100.0, p.ColumnStiffenerSpacing)) + 1);
+                int stiffeners = 2 * res.ColumnWidthFaceStiffenerCount +
+                                 2 * res.ColumnDepthFaceStiffenerCount;
                 int yokeLevels = res.ColumnYokeLevelCount;
                 int tieRods = yokeLevels * 2 * Math.Max(1, p.ColumnTieRodCountPerFace);
-                layoutSummary = $" Áp lực thiết kế {res.ColumnDesignPressure:F2} kN/m²; bố trí khoảng {stiffeners} nẹp đứng, {yokeLevels} tầng gông đôi, {tieRods} ty D{p.ColumnTieRodDiameter:F0} và yêu cầu {Math.Max(2, p.ColumnBraceCount)} chống/neo.";
+                layoutSummary = $" Áp lực thiết kế {res.ColumnDesignPressure:F2} kN/m²; bố trí {res.ColumnWidthFaceStiffenerCount} nẹp trên mỗi mặt b, {res.ColumnDepthFaceStiffenerCount} nẹp trên mỗi mặt h ({stiffeners} nẹp đứng), {yokeLevels} tầng gông đôi, {tieRods} ty D{p.ColumnTieRodDiameter:F0} và yêu cầu {Math.Max(2, p.ColumnBraceCount)} chống/neo.";
                 SelectedFloorInfo = $"Cột {p.ColumnWidth:F0}×{p.ColumnDepth:F0}, H={p.ColumnHeight:F0} mm | Offset tim {p.ColumnAxisOffset:F0} mm";
                 ColumnPressureVerification = $"ÁP LỰC: p_h=γH={res.ColumnHydrostaticPressure:F2}; p_cap=7,2+785R/(T+17,8)={res.ColumnPressureCap:F2}; p_d(0)=min(p_h,p_cap)γG+q_vγQ={res.ColumnDesignPressure:F2} kN/m².";
                 ColumnSpanVerification = $"SƠ ĐỒ BIẾN BƯỚC: cao độ gông từ chân cột = [{res.ColumnYokeLayoutText}] mm. Nhịp xà gồ đứng nguy hiểm L={res.ColumnCriticalStiffenerSpan:F0} mm tại p_d={res.ColumnCriticalStiffenerPressure:F2} kN/m²; dải ảnh hưởng gông nguy hiểm b={res.ColumnCriticalYokeTributaryHeight:F0} mm tại p_d={res.ColumnCriticalYokePressure:F2} kN/m².";
@@ -690,30 +701,54 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 BeamLoadPathVerification = $"TRUYỀN LỰC: {res.BeamLoadPathText}. Mỗi lớp đều kiểm tra uốn σ=M/W và cắt τ=1,5V/A; võng dùng 5qL⁴/(384EI) cho tải đều, PL³/(48EI) cho xà gồ chính chịu tải tập trung. Đầu U nhận N_Ed={res.BeamSupportReaction:F2} kN.";
                 BeamConstructionVerification = $"THÀNH DẦM: H_d=½γGγ_ch²+γQq_đầmh={res.BeamSideResultantPerMetre:F2} kN/m; {restraint}. Trình tự: dựng Ringlock → xà gồ chính → xà gồ phụ → ván phủ phim → cốt thép dầm rồi cốt thép sàn → đổ từ xa đến gần. Chỉ tháo khi bê tông được nghiệm thu ≥{p.BeamStrippingStrengthPercent:F0}% cường độ; vùng đầm chồng {p.BeamVibratorOverlap:F0} mm.";
             }
+            List<FloorElementModel> selectedComponents = GetScopedComponents(
+                checkSlab, checkFoundation, checkBeam, checkColumn);
             var scopeLabels = new List<string>();
-            if (checkSlab) scopeLabels.Add("Sàn");
-            if (checkFoundation) scopeLabels.Add("Móng/Nền");
-            if (checkBeam) scopeLabels.Add("Dầm");
-            if (checkColumn) scopeLabels.Add("Cột");
-            int selectedElementCount = _SharedDataViewModel.SelectedSlabCount +
-                                       _SharedDataViewModel.SelectedFoundationCount +
-                                       _SharedDataViewModel.SelectedBeamCount +
-                                       _SharedDataViewModel.SelectedColumnCount;
+            if (selectedComponents.Any(item => item.ComponentType == StructuralComponentType.Slab)) scopeLabels.Add("Sàn");
+            if (selectedComponents.Any(item => item.ComponentType == StructuralComponentType.Foundation)) scopeLabels.Add("Móng/Nền");
+            if (selectedComponents.Any(item => item.ComponentType == StructuralComponentType.Beam)) scopeLabels.Add("Dầm");
+            if (selectedComponents.Any(item => item.ComponentType == StructuralComponentType.Column)) scopeLabels.Add("Cột");
+            if (scopeLabels.Count == 0)
+            {
+                if (checkSlab) scopeLabels.Add("Sàn");
+                if (checkFoundation) scopeLabels.Add("Móng/Nền");
+                if (checkBeam) scopeLabels.Add("Dầm");
+                if (checkColumn) scopeLabels.Add("Cột");
+            }
+            int selectedElementCount = selectedComponents.Count;
+            string actualComposition = string.Join(" · ", new[]
+            {
+                (Label: "sàn", Count: selectedComponents.Count(item => item.ComponentType == StructuralComponentType.Slab)),
+                (Label: "móng", Count: selectedComponents.Count(item => item.ComponentType == StructuralComponentType.Foundation)),
+                (Label: "dầm", Count: selectedComponents.Count(item => item.ComponentType == StructuralComponentType.Beam)),
+                (Label: "cột", Count: selectedComponents.Count(item => item.ComponentType == StructuralComponentType.Column))
+            }.Where(item => item.Count > 0).Select(item => $"{item.Count} {item.Label}"));
             string sourceDescription = selectedElementCount > 0
-                ? _SharedDataViewModel.SelectedComponentComposition
+                ? $"{selectedElementCount} cấu kiện ({actualComposition})"
                 : "dùng thông số cấu kiện hiện hành";
             SelectedFloorInfo = $"Phạm vi tính: {string.Join(" · ", scopeLabels)} | {sourceDescription}";
+
+            CalculationCheckDisplay governingCheck = DetailedChecks
+                .Where(check => !double.IsNaN(check.Utilization) && !double.IsInfinity(check.Utilization))
+                .OrderByDescending(check => check.Utilization)
+                .FirstOrDefault();
+            string governingSummary = governingCheck == null
+                ? string.Empty
+                : $" Kiểm tra chi phối: [{governingCheck.Group}] {governingCheck.Component} — " +
+                  $"{governingCheck.Demand}/{governingCheck.Allowable}, mức sử dụng {governingCheck.Utilization:F1}%.";
             if (isSystemOk)
             {
                 IsSystemSafeColor = "#D1FAE5";
                 IsSystemSafeBorderColor = "#10B981";
                 IsSystemSafeIconColor = "#10B981";
                 IsSystemSafeTextColor = "#065F46";
-                SystemSafeTitle = "HỆ THỐNG ĐẠT YÊU CẦU AN TOÀN KỸ THUẬT";
+                SystemSafeTitle = "CẤU KIỆN ĐẠT YÊU CẦU AN TOÀN KỸ THUẬT";
                 
                 string tieuChuanStr = _SharedDataViewModel.SelectedTieuChuan == 0 ? "TCVN 9356:2012" : 
                                      (_SharedDataViewModel.SelectedTieuChuan == 1 ? "EN 1995-1-1 (Eurocode 5)" : "AWC NDS-2018");
-                SystemSafeDescription = $"Tất cả các cấu kiện ván khuôn và đà giáo đều đảm bảo khả năng chịu lực và độ võng nằm trong giới hạn cho phép theo {tieuChuanStr}.{layoutSummary}";
+                SystemSafeDescription = $"Đã kiểm tra {selectedElementCount} cấu kiện thuộc phạm vi {string.Join(", ", scopeLabels)}. " +
+                                        $"Các kiểm tra ứng suất, độ võng, ổn định và tải trọng đều nằm trong giới hạn cho phép theo {tieuChuanStr}." +
+                                        governingSummary + layoutSummary;
             }
             else
             {
@@ -721,13 +756,17 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 IsSystemSafeBorderColor = "#EF4444";
                 IsSystemSafeIconColor = "#EF4444";
                 IsSystemSafeTextColor = "#991B1B";
-                SystemSafeTitle = "HỆ THỐNG KHÔNG ĐẠT YÊU CẦU AN TOÀN KỸ THUẬT";
+                SystemSafeTitle = "CẤU KIỆN KHÔNG ĐẠT YÊU CẦU AN TOÀN KỸ THUẬT";
                 
                 var failedItems = DetailedChecks.Where(check => !check.IsOk)
                     .GroupBy(check => check.Group)
                     .Select(group => $"{group.Key}: {string.Join(", ", group.Select(check => check.Component).Distinct())}")
                     .ToList();
-                SystemSafeDescription = $"Các nhóm [{string.Join("; ", failedItems)}] KHÔNG ĐẠT do vượt giới hạn cho phép. Nhấn [Tự động thiết kế đạt chuẩn] để tăng tiết diện/số lượng phụ kiện hoặc giảm bước bố trí; kích thước kết cấu Revit được giữ nguyên.{layoutSummary}";
+                SystemSafeDescription = calculationSets.Count == 0
+                    ? "Không có cấu kiện thuộc các loại đang bật trong phạm vi đã chọn. Hãy chọn cấu kiện hoặc bật đúng loại Sàn, Móng, Dầm, Cột."
+                    : $"Đã kiểm tra {selectedElementCount} cấu kiện. Các nhóm [{string.Join("; ", failedItems)}] KHÔNG ĐẠT do vượt giới hạn cho phép. " +
+                      "Nhấn [Tự động thiết kế đạt chuẩn] để tăng tiết diện/số lượng phụ kiện hoặc giảm bước bố trí; kích thước kết cấu Revit được giữ nguyên." +
+                      governingSummary + layoutSummary;
             }
 
             RevitVersionStatus = "Đã cập nhật kiểm tra kỹ thuật lúc " + DateTime.Now.ToString("HH:mm:ss");
@@ -741,6 +780,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (e.PropertyName == nameof(_SharedDataViewModel.TinhToanPreviewControl))
             {
                 OnPropertyChanged(nameof(ProjectPreview));
+            }
+            else if (e.PropertyName == nameof(SharedDataViewModel.FloorElements))
+            {
+                FloorElements = (_SharedDataViewModel.FloorElements ?? new List<FloorElementModel>()).ToList();
+                EnsureActiveCalculationComponent();
+                ExecuteRecalculate();
             }
             else if (e.PropertyName == nameof(SharedDataViewModel.WoodStrength) ||
                 e.PropertyName == nameof(SharedDataViewModel.ElasticModulus) ||
@@ -891,23 +936,70 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         /// </summary>
         private void OnSlabSelectionCompleted(object sender, SlabSelectionEventArgs e)
         {
-            FloorElements = e.FloorElements;
+            FloorElements = (e.FloorElements ?? new List<FloorElementModel>()).ToList();
+            EnsureActiveCalculationComponent();
             ExecuteRecalculate();
-            RevitVersionStatus = $"Đồng bộ từ Revit: {e.FloorCount} sàn - Cập nhật lúc {DateTime.Now:HH:mm:ss}";
+            RevitVersionStatus = $"Đồng bộ từ Revit: {e.ComponentCount} cấu kiện " +
+                                 $"({e.SlabCount} sàn · {e.FoundationCount} móng · {e.BeamCount} dầm · {e.ColumnCount} cột) " +
+                                 $"- Cập nhật lúc {DateTime.Now:HH:mm:ss}";
         }
 
-        private List<FloorElementModel> GetScopedComponents(bool slab, bool foundation, bool beam, bool column)
+        private static string ComponentKey(FloorElementModel component)
         {
-            return (_SharedDataViewModel.FloorElements ?? new List<FloorElementModel>())
-                .Where(item => item != null &&
-                    (slab && item.ComponentType == StructuralComponentType.Slab ||
-                     foundation && item.ComponentType == StructuralComponentType.Foundation ||
-                     beam && item.ComponentType == StructuralComponentType.Beam ||
-                     column && item.ComponentType == StructuralComponentType.Column))
+            if (component == null) return string.Empty;
+            return string.IsNullOrWhiteSpace(component.UniqueId) ? component.ElementId : component.UniqueId;
+        }
+
+        private void EnsureActiveCalculationComponent()
+        {
+            List<FloorElementModel> available = (_SharedDataViewModel.FloorElements ?? new List<FloorElementModel>())
+                .Where(item => item != null)
+                .ToList();
+            if (available.Count == 0)
+            {
+                _activeCalculationComponentKey = null;
+                return;
+            }
+
+            FloorElementModel active = available.FirstOrDefault(item =>
+                string.Equals(ComponentKey(item), _activeCalculationComponentKey, StringComparison.OrdinalIgnoreCase));
+            if (active == null)
+            {
+                active = available.FirstOrDefault(item =>
+                    item.ComponentType == _SharedDataViewModel.CurrentComponentType) ?? available[0];
+                _activeCalculationComponentKey = ComponentKey(active);
+            }
+
+            if (_SharedDataViewModel.CurrentComponentType != active.ComponentType)
+                _SharedDataViewModel.CurrentComponentType = active.ComponentType;
+        }
+
+        private List<FloorElementModel> GetScopedComponents(bool slab, bool foundation, bool beam, bool column,
+            bool honorActiveComponent = true)
+        {
+            List<FloorElementModel> allComponents = (_SharedDataViewModel.FloorElements ?? new List<FloorElementModel>())
+                .Where(item => item != null)
                 .GroupBy(item => string.IsNullOrWhiteSpace(item.UniqueId) ? item.ElementId : item.UniqueId,
                     StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.Last())
                 .ToList();
+
+            if (honorActiveComponent && !string.IsNullOrWhiteSpace(_activeCalculationComponentKey))
+            {
+                FloorElementModel focused = allComponents.FirstOrDefault(item =>
+                    string.Equals(ComponentKey(item), _activeCalculationComponentKey, StringComparison.OrdinalIgnoreCase));
+                if (focused != null) return new List<FloorElementModel> { focused };
+            }
+
+            List<FloorElementModel> available = allComponents
+                .Where(item =>
+                    (slab && item.ComponentType == StructuralComponentType.Slab ||
+                     foundation && item.ComponentType == StructuralComponentType.Foundation ||
+                     beam && item.ComponentType == StructuralComponentType.Beam ||
+                     column && item.ComponentType == StructuralComponentType.Column))
+                .ToList();
+
+            return available;
         }
 
         private void ApplyColumnBraceAssessment(FloorElementModel component, CalculationParameters parameters)
@@ -947,7 +1039,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private List<KeyValuePair<string, CalculationResult>> BuildScopedCalculationSets(CalculationParameters template,
             bool checkSlab, bool checkFoundation, bool checkBeam, bool checkColumn)
         {
-            List<FloorElementModel> components = GetScopedComponents(checkSlab, checkFoundation, checkBeam, checkColumn);
+            List<FloorElementModel> components = GetScopedComponents(
+                checkSlab, checkFoundation, checkBeam, checkColumn);
             var prepared = components.Select(component =>
             {
                 CalculationParameters parameters = _SharedDataViewModel.GetEffectiveComponentParameters(component, template);
@@ -964,25 +1057,26 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 var first = group.First();
                 FloorElementModel component = first.Component;
                 CalculationParameters parameters = first.Parameters;
+                string identity = $"ID {component.ElementId} · {component.FamilyTypeName}";
                 string prefix;
                 CalculationResult result;
                 switch (component.ComponentType)
                 {
                     case StructuralComponentType.Foundation:
-                        prefix = $"MÓNG/NỀN · {parameters.SlabThickness:F0} mm";
+                        prefix = $"MÓNG/NỀN · {identity} · dày {parameters.SlabThickness:F0} mm";
                         parameters.IsGroundLevel = true;
                         result = FormworkCalculationService.CheckSafety(parameters);
                         break;
                     case StructuralComponentType.Beam:
-                        prefix = $"DẦM · {parameters.BeamWidth:F0}×{parameters.BeamDepth:F0}×{parameters.BeamLength:F0} mm";
+                        prefix = $"DẦM · {identity} · {parameters.BeamWidth:F0}×{parameters.BeamDepth:F0}×{parameters.BeamLength:F0} mm";
                         result = FormworkCalculationService.CheckBeamSafety(parameters);
                         break;
                     case StructuralComponentType.Column:
-                        prefix = $"{(parameters.ColumnIsBoundaryOrCorner ? "CỘT BIÊN" : "CỘT GIỮA")} · {parameters.ColumnWidth:F0}×{parameters.ColumnDepth:F0} mm";
+                        prefix = $"{(parameters.ColumnIsBoundaryOrCorner ? "CỘT BIÊN" : "CỘT GIỮA")} · {identity} · {parameters.ColumnWidth:F0}×{parameters.ColumnDepth:F0} mm";
                         result = FormworkCalculationService.CheckColumnSafety(parameters);
                         break;
                     default:
-                        prefix = $"SÀN · {parameters.SlabThickness:F0} mm";
+                        prefix = $"SÀN · {identity} · dày {parameters.SlabThickness:F0} mm";
                         parameters.IsGroundLevel = false;
                         result = FormworkCalculationService.CheckSafety(parameters);
                         break;
@@ -994,8 +1088,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 sets.Add(new KeyValuePair<string, CalculationResult>(prefix, result));
             }
 
-            // Backward-compatible representatives keep the page useful before any
-            // Revit selection has been made. Selected elements always take precedence.
+            // Default representatives are allowed only before any Revit component has
+            // been selected. Once a selection exists, never fabricate a missing type:
+            // checks and summaries must describe the actual selected components only.
+            if ((_SharedDataViewModel.FloorElements?.Count ?? 0) > 0)
+                return sets;
+
             if (checkSlab && !components.Any(item => item.ComponentType == StructuralComponentType.Slab))
             {
                 var p = template.Clone(); p.IsGroundLevel = false;
@@ -1241,7 +1339,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 checkColumn = CurrentComponentType == StructuralComponentType.Column;
             }
 
-            List<FloorElementModel> components = GetScopedComponents(checkSlab, checkFoundation, checkBeam, checkColumn);
+            // Auto-design remains a project/scope operation. The active element only
+            // controls what is displayed in the calculation panel.
+            List<FloorElementModel> components = GetScopedComponents(
+                checkSlab, checkFoundation, checkBeam, checkColumn, honorActiveComponent: false);
             void AddRepresentative(StructuralComponentType type)
             {
                 if (components.Any(item => item.ComponentType == type)) return;

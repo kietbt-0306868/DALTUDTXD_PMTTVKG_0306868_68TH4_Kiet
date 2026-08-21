@@ -362,7 +362,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
                 foreach (Element elem in floors)
                 {
-                    BuiltInCategory cat = (BuiltInCategory)elem.Category.Id.IntegerValue;
+                    BuiltInCategory cat = (BuiltInCategory)elem.Category.Id.Value;
                     bool elemIsFoundation = false;
 
                     if (cat == BuiltInCategory.OST_StructuralFoundation)

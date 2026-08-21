@@ -3,11 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:hx="http://helix-toolkit.org/wpf"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800"
-             Background="#F5F5F5">
+    Background="#F5F5F5">
     <Grid>
+        <!-- Native Revit View3D: the live project model plus add-in-owned DirectShapes. -->
+        <ContentControl Content="{Binding NativePreviewControl}" Panel.ZIndex="0"/>
+
         <Border VerticalAlignment="Top"
                 HorizontalAlignment="Left"
                 Background="#EFFFFFFF"
@@ -32,14 +34,17 @@
             </StackPanel>
         </Border>
 
-        <TextBlock Text="Đang dựng toàn bộ mô hình kết cấu và ván khuôn..."
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   FontSize="18"
-                   Foreground="Gray"
-                   Panel.ZIndex="1">
-            <TextBlock.Style>
-                <Style TargetType="TextBlock">
+        <Border HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Width="520"
+                Padding="22"
+                CornerRadius="8"
+                Background="#EEFFFFFF"
+                BorderBrush="#CBD5E1"
+                BorderThickness="1"
+                Panel.ZIndex="3">
+            <Border.Style>
+                <Style TargetType="Border">
                     <Setter Property="Visibility" Value="Collapsed" />
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsRendering}" Value="True">
@@ -47,22 +52,38 @@
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
-            </TextBlock.Style>
-        </TextBlock>
+            </Border.Style>
+            <StackPanel>
+                <TextBlock Text="ĐANG DỰNG MÔ HÌNH 3D REVIT"
+                           FontSize="17" FontWeight="Bold" Foreground="#1E3A5F"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="{Binding RenderProgressText}"
+                           Margin="0,12,0,8" TextWrapping="Wrap"
+                           HorizontalAlignment="Center" Foreground="#475569"/>
+                <ProgressBar Height="18" Minimum="0" Maximum="100"
+                             Value="{Binding RenderProgress, Mode=OneWay}"/>
+                <Grid Margin="0,7,0,0">
+                    <TextBlock Text="{Binding RenderRemainingText}" Foreground="#64748B"/>
+                    <TextBlock HorizontalAlignment="Right" FontWeight="Bold" Foreground="#0F766E">
+                        <Run Text="{Binding RenderProgress, Mode=OneWay}"/><Run Text="%"/>
+                    </TextBlock>
+                </Grid>
+                <Button Content="HỦY DỰNG 3D"
+                        Command="{Binding CancelRenderCommand}"
+                        HorizontalAlignment="Center"
+                        Margin="0,16,0,0" Padding="22,7"
+                        Background="#FFFFFF" Foreground="#B91C1C"
+                        BorderBrush="#FCA5A5" BorderThickness="1"
+                        FontWeight="SemiBold"/>
+            </StackPanel>
+        </Border>
 
-        <hx:HelixViewport3D x:Name="Viewport"
-                            ZoomExtentsWhenLoaded="True"
-                            ShowCoordinateSystem="True"
-                            ShowViewCube="True"
-                            ModelUpDirection="0,0,1"
-                            CameraMode="Inspect"
-                            Background="Transparent"
-                            IsRotationEnabled="True"
-                            IsPanEnabled="True"
-                            IsZoomEnabled="True"
-                            RenderOptions.EdgeMode="Aliased">
-            <hx:DefaultLights />
-            <ModelVisual3D Content="{Binding ModelGroup}" />
-        </hx:HelixViewport3D>
+        <!--
+            Do not instantiate HelixToolkit/SharpDX in the Revit-hosted window. Revit owns
+            the DirectX device and the second SharpDX viewport could crash the process as
+            soon as this tab became visible. The project preview is exclusively Revit's
+            native PreviewControl; the calculation workflow remains available without 3D.
+        -->
+        <Border Background="#F8FAFC" Panel.ZIndex="-1"/>
     </Grid>
 </UserControl>

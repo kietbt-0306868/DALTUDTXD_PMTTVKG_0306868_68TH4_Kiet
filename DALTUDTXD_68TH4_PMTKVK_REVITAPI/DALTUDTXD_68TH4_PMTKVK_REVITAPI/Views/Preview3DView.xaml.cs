@@ -13,16 +13,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views
 
         private void Preview3DView_IsVisibleChanged(object sender, System.Windows.DependencyPropertyChangedEventArgs e)
         {
-            if (this.IsVisible && Viewport != null)
+            // Rendering is started only by RequestFastPreview3D/RequestRender3D. Starting
+            // again from IsVisibleChanged created a race between two native PreviewControl
+            // instances and could terminate Revit before a managed exception was raised.
+            if (!this.IsVisible && DataContext is Preview3DViewModel hiddenViewModel)
             {
-                if (DataContext is Preview3DViewModel viewModel)
-                {
-                    viewModel.EnsureProjectModel();
-                }
-
-                // Force a layout update and zoom extents when becoming visible to fix blank rendering bugs
-                Viewport.UpdateLayout();
-                Viewport.ZoomExtents();
+                hiddenViewModel.ReleaseProjectModel();
             }
         }
     }

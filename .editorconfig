@@ -1,0 +1,6 @@
+root = true
+
+# This project is a Windows-only Revit addin (net8.0-windows).
+# CA1416 platform-compat warnings are false positives for WPF / Revit API types.
+[*.cs]
+dotnet_diagnostic.CA1416.severity = none

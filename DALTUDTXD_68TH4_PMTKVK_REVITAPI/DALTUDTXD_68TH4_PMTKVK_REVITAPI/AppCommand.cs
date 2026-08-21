@@ -4,18 +4,19 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.Attributes;
 using DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels;
 using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services;
+using System.Runtime.CompilerServices;
+using System.Windows.Interop;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
 {
     [Transaction(TransactionMode.Manual)]
     public abstract class AppCommandBase : IExternalCommand
     {
+        private static readonly ConditionalWeakTable<Document, SharedDataViewModel> Sessions =
+            new ConditionalWeakTable<Document, SharedDataViewModel>();
+
         protected abstract string TargetTab { get; }
         protected virtual string TargetAction => null;
-
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -29,39 +30,22 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                 }
                 Document doc = uiDoc.Document;
 
-                // Create a single instance of SharedDataViewModel to share across the application
-                var dialogService = new MessageBoxDialogService();
-                
+                // Keep calculation/selection state for the lifetime of this Revit Document.
+                // Previously every ribbon button created a fresh data model, so a command
+                // could not see the selection/design produced by the previous command.
+                SharedDataViewModel sharedViewModel = Sessions.GetValue(doc,
+                    _ => new SharedDataViewModel(new MessageBoxDialogService()));
                 Action closeWindowAction = null;
-                var anSoCuaSoDelegate = new Action(() => 
-                {
-                    closeWindowAction?.Invoke();
-                });
-                
-                var sharedViewModel = new SharedDataViewModel(dialogService, anSoCuaSoDelegate);
+                sharedViewModel.SetCloseWindowAction(() => closeWindowAction?.Invoke());
                 sharedViewModel.InitializeRevitContext(doc, uiDoc, null);
                 sharedViewModel.StartupTab = TargetTab;
                 sharedViewModel.StartupAction = TargetAction;
 
                 while (true)
                 {
-                    var dummyOwner = new System.Windows.Window()
-                    {
-                        Width = 0, Height = 0,
-                        WindowStyle = System.Windows.WindowStyle.None,
-                        ShowInTaskbar = false,
-                        AllowsTransparency = true,
-                        Background = System.Windows.Media.Brushes.Transparent,
-                        Opacity = 0
-                    };
-                    dummyOwner.Show();
-
                     var mainWindow = new MainWindow(sharedViewModel);
-                    mainWindow.Owner = dummyOwner;
-
                     IntPtr revitHandle = commandData.Application.MainWindowHandle;
-                    // Bỏ khóa Revit để cho phép tương tác (Pan, Zoom, đổi Level)
-                    // EnableWindow(revitHandle, false);
+                    new WindowInteropHelper(mainWindow).Owner = revitHandle;
 
                     closeWindowAction = () => { mainWindow.DialogResult = true; };
 
@@ -72,10 +56,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                         sharedViewModel.StartupTab = null;
                     }
 
-                    // Auto-execute the startup action if specified by the ribbon button
+                    // Queue the shortcut only after ContentRendered. Running it here used
+                    // to execute against an unrendered WPF tree and was the root of several
+                    // ribbon crashes and invisible long-running operations.
                     if (!string.IsNullOrEmpty(sharedViewModel.StartupAction))
                     {
-                        mainWindow.ExecuteStartupAction(sharedViewModel.StartupAction);
+                        mainWindow.QueueStartupAction(sharedViewModel.StartupAction);
                         sharedViewModel.StartupAction = null;
                     }
 
@@ -85,8 +71,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                     }
                     finally
                     {
-                        // EnableWindow(revitHandle, true);
-                        dummyOwner.Close();
                         sharedViewModel.DisposePreviewControl();
                     }
 
@@ -102,6 +86,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                         break;
                     }
                 }
+
+                sharedViewModel.SetCloseWindowAction(null);
 
                 // Dọn dẹp trạng thái Highlight trước khi đóng Add-in hoàn toàn
                 if (sharedViewModel.KetQuaLastHighlightedFloorIds != null && sharedViewModel.KetQuaLastHighlightedFloorIds.Count > 0 && sharedViewModel.KetQuaLastHighlightedViewId != null)
@@ -133,7 +119,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
             }
             catch (Exception ex)
             {
-                message = "Có lỗi xảy ra: " + ex.Message;
+                message = $"Không thể thực hiện lệnh {GetType().Name}: {ex.Message}";
                 return Result.Failed;
             }
         }
@@ -432,7 +418,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
     [Transaction(TransactionMode.Manual)]
     public class CmdPreview3D : AppCommandBase
     {
-        protected override string TargetTab => "Preview3DView";
+        // PreviewFast selects its rendering mode before navigating. Navigating here used
+        // to make the preview tab visible first, which queued a second render with stale
+        // mode/state while the WPF window was still being constructed.
+        protected override string TargetTab => null;
+        protected override string TargetAction => "PreviewFast";
     }
 
     // ── Lựa Chọn ──
@@ -481,6 +471,64 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
     {
         protected override string TargetTab => "TinhToanView";
         protected override string TargetAction => "Recalculate";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdAutoDesign : AppCommandBase
+    {
+        protected override string TargetTab => "TinhToanView";
+        protected override string TargetAction => "AutoDesign";
+    }
+
+    // ── Quy trình bóc tách 6 bước ──
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdJoinByConstructionSequence : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "JoinByConstructionSequence";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdNameFormworkComponents : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "NameFormworkComponents";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdLoadFormworkSharedParameters : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "LoadFormworkSharedParameters";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdInitializeFormworkCalculation : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "InitializeFormworkCalculation";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdCreateFormworkSchedules : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "CreateFormworkSchedules";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdExtractFormworkAreas : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "ExtractFormworkAreas";
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdRunFullTakeoffWorkflow : AppCommandBase
+    {
+        protected override string TargetTab => "DuLieuView";
+        protected override string TargetAction => "RunFullTakeoffWorkflow";
     }
 
     // ── Xuất & Mô Hình ──

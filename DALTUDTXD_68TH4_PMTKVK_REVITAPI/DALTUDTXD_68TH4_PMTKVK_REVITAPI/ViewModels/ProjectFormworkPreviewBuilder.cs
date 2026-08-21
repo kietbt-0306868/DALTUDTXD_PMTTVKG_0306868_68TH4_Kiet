@@ -4,7 +4,10 @@ using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using Autodesk.Revit.DB;
-using HelixToolkit.Wpf;
+using HelixToolkit.Wpf.SharpDX;
+using HelixToolkit.SharpDX;
+using Point3D = System.Windows.Media.Media3D.Point3D;
+using Vector3D = System.Windows.Media.Media3D.Vector3D;
 using MediaColor = System.Windows.Media.Color;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
@@ -119,6 +122,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private readonly SharedDataViewModel _data;
         private readonly Document _document;
         private Point3D _origin;
+        internal Point3D CoordinateOriginMm => _origin;
         private List<double> _levelElevationsMm;
         private List<Level> _levels;
         private Options _geometryOptions;
@@ -129,7 +133,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private int _perimeterColumnCount;
         private int _cornerColumnCount;
         private int _cableRestraintCount;
-        private int _unrestrainedColumnCount;
         private int _warningColumnCount;
         private int _openingColumnCount;
         private int _foundationColumnCount;
@@ -212,7 +215,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
         }
 
-        public Model3DGroup Build(out string summary)
+        public GroupModel3D Build(out string summary)
         {
             var categories = new List<BuiltInCategory>
             {
@@ -233,7 +236,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (elements.Count == 0)
             {
                 summary = "Không tìm thấy sàn, dầm, cột hoặc móng trong mô hình Revit.";
-                return new Model3DGroup();
+                return new GroupModel3D();
             }
 
             _data.BeginColumnBraceAssessmentRefresh();
@@ -291,7 +294,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 }
             }
 
-            var group = new Model3DGroup();
+            var group = new GroupModel3D();
             // Opaque materials stay on WPF's fast depth-buffered path. Transparent
             // concrete forced expensive per-frame sorting for the entire building.
             AddModel(group, _floorConcrete, MediaColor.FromRgb(185, 195, 205));
@@ -311,8 +314,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 .Count();
 
             int triangles = group.Children
-                .OfType<GeometryModel3D>()
-                .Select(model => model.Geometry as MeshGeometry3D)
+                .OfType<MeshGeometryModel3D>()
+                .Select(model => model.Geometry as HelixToolkit.SharpDX.MeshGeometry3D)
                 .Where(mesh => mesh != null)
                 .Sum(mesh => mesh.TriangleIndices.Count / 3);
             string lod = _compactLod ? "LOD tối ưu" : "LOD chuẩn";
@@ -328,13 +331,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             string restraintSummary = _data.ColumnBracePlacementModeIndex > 0
                 ? $" · phân đoạn cột trong/biên/góc {_interiorColumnCount}/{_perimeterColumnCount}/{_cornerColumnCount} · {_cableRestraintCount} cáp-tăng đơ"
                 : string.Empty;
-            if (_unrestrainedColumnCount > 0)
-                restraintSummary += $" · CẢNH BÁO {_unrestrainedColumnCount} cột thiếu 2 hướng neo";
             if (_openingColumnCount > 0 || _warningColumnCount > 0 || _foundationColumnCount > 0)
                 restraintSummary += $" · lỗ mở/cảnh báo/cột móng {_openingColumnCount}/{_warningColumnCount}/{_foundationColumnCount}";
             summary = $"Toàn bộ dự án: {Math.Max(stories, 1)} tầng · {floors} sàn · {beams} dầm · {columns} cột · {foundations} móng · {triangles:N0} tam giác ({lod}){platformSummary}{boundarySummary}{restraintSummary}{footSafetySummary}";
 
-            if (group.CanFreeze) group.Freeze();
             return group;
         }
 
@@ -1821,15 +1821,15 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private double Z(double feet) => feet * MmPerFoot - _origin.Z;
         private Point3D ToPoint(XYZ point) => new Point3D(X(point.X), Y(point.Y), Z(point.Z));
 
-        private static void AddModel(Model3DGroup group, SimpleMeshBuilder builder, MediaColor color)
+        private static void AddModel(GroupModel3D group, SimpleMeshBuilder builder, MediaColor color)
         {
             if (builder.Mesh.Positions.Count == 0) return;
-            MeshGeometry3D mesh = builder.ToMesh();
-            if (mesh.CanFreeze) mesh.Freeze();
-            System.Windows.Media.Media3D.Material material = MaterialHelper.CreateMaterial(color);
-            if (material.CanFreeze) material.Freeze();
-            var model = new GeometryModel3D(mesh, material);
-            if (model.CanFreeze) model.Freeze();
+            var mesh = builder.ToMesh();
+            // Freeze not needed for SharpDX geometry
+            var material = new HelixToolkit.Wpf.SharpDX.DiffuseMaterial() { DiffuseColor = new HelixToolkit.Maths.Color4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f) };
+            // Freeze not needed for SharpDX material
+            var model = new MeshGeometryModel3D { Geometry = mesh, Material = material };
+            // Freeze not needed for SharpDX model
             group.Children.Add(model);
         }
     }

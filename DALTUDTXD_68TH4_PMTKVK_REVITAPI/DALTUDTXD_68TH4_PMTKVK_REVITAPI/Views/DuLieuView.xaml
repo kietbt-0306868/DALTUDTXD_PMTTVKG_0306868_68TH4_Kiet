@@ -11,6 +11,7 @@
     <Grid>
         <Grid>
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="30"/>
             </Grid.RowDefinitions>
@@ -20,8 +21,40 @@
                 <MenuItem Header=""/>
             </Menu>
 
+            <Border Grid.Row="0" Margin="15,10,15,0" Padding="12" Background="#F8FAFC"
+                    BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="CHẠY TOÀN BỘ 6 BƯỚC"
+                                Command="{Binding RunFullTakeoffWorkflowCommand}" Padding="14,7"
+                                Background="#0F766E" Foreground="White" BorderBrush="#0F766E"
+                                FontWeight="Bold" Cursor="Hand"/>
+                        <StackPanel>
+                            <TextBlock Text="BÓC TÁCH KHỐI LƯỢNG VÁN KHUÔN" FontSize="14"
+                                       FontWeight="Bold" Foreground="#1E293B"/>
+                            <TextBlock Text="{Binding TakeoffWorkflowStatus}" Foreground="#475569"
+                                       Margin="0,3,12,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <WrapPanel>
+                        <Button Content="1. JOIN theo trình tự" Command="{Binding JoinByConstructionSequenceCommand}"
+                                Margin="0,0,6,5" Padding="10,6" ToolTip="Join các cấu kiện đang chọn theo thứ tự Móng → Cột → Dầm → Sàn"/>
+                        <Button Content="2. Đặt tên cấu kiện" Command="{Binding NameFormworkComponentsCommand}"
+                                Margin="0,0,6,5" Padding="10,6" ToolTip="Tạo tên VK riêng theo tầng, loại cấu kiện và số thứ tự; không ghi đè Mark hiện có"/>
+                        <Button Content="3. Load Shared Parameter" Command="{Binding LoadFormworkSharedParametersCommand}"
+                                Margin="0,0,6,5" Padding="10,6" ToolTip="Nạp và liên kết các tham số VK_* cho Sàn, Dầm, Cột và Móng"/>
+                        <Button Content="4. Khởi tạo tính toán VK" Command="{Binding InitializeFormworkCalculationCommand}"
+                                Margin="0,0,6,5" Padding="10,6" ToolTip="Đọc tải trọng, hình học và diện tích ròng rồi chuyển sang trang tính toán"/>
+                        <Button Content="5. Tạo bảng thống kê" Command="{Binding CreateFormworkSchedulesCommand}"
+                                Margin="0,0,6,5" Padding="10,6" ToolTip="Tạo bốn Schedule Revit cho Sàn, Dầm, Cột và Móng"/>
+                        <Button Content="6. Trích xuất diện tích" Command="{Binding ExtractFormworkAreasCommand}"
+                                Margin="0,0,0,5" Padding="10,6" ToolTip="Ghi diện tích ván khuôn ròng và trạng thái thiết kế vào tham số VK_*"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Vùng Hiển Thị Chính -->
-            <Grid Grid.Row="0" Margin="15,10">
+            <Grid Grid.Row="1" Margin="15,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="10"/>
@@ -34,7 +67,7 @@
                     <!-- Danh sách các sàn đã chọn (Dạng Thẻ) -->
                     <Border BorderBrush="#ABB2B9" BorderThickness="1" CornerRadius="3" Background="White" Padding="15" Margin="0,0,0,10">
                         <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="DANH SÁCH SÀN ĐÃ CHỌN" Foreground="#2C3E50" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                        <TextBlock DockPanel.Dock="Top" Text="DANH SÁCH CẤU KIỆN ĐÃ CHỌN (NHÓM THEO TẦNG / LOẠI / TÊN)" Foreground="#2C3E50" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
                         
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,5,0">
                             <ItemsControl ItemsSource="{Binding FloorElements}">
@@ -60,6 +93,8 @@
                                                         <TextBlock Text="{Binding Thickness, StringFormat={}{0:F0} mm}" Foreground="#34495E" FontWeight="SemiBold"/>
                                                     </StackPanel>
                                                     <TextBlock Text="{Binding UniqueId, StringFormat='ID: {0}'}" Foreground="#BDC3C7" FontSize="11"/>
+                                                    <TextBlock Text="{Binding FormworkName}" Foreground="#0F766E" FontWeight="SemiBold" FontSize="11"/>
+                                                    <TextBlock Text="{Binding ConstructionSequence, StringFormat='Trình tự: {0}'}" Foreground="#64748B" FontSize="11"/>
                                                 </StackPanel>
                                             </DockPanel>
                                         </Border>
@@ -131,7 +166,7 @@
         </Grid>
 
         <!-- Thanh Trạng Thái -->
-        <StatusBar Grid.Row="1" Background="#F8F9F9" BorderBrush="#D5DBDB" BorderThickness="0,1,0,0">
+        <StatusBar Grid.Row="2" Background="#F8F9F9" BorderBrush="#D5DBDB" BorderThickness="0,1,0,0">
             <StatusBarItem Content="Ván khuôn sàn"/>
             <Separator/>
             <StatusBarItem Content="{Binding RevitVersionStatus}"/>

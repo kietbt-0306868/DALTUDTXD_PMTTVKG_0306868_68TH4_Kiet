@@ -7,6 +7,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
 {
     public partial class MainWindow : Window
     {
+        private string _pendingStartupAction;
+        private bool _startupActionExecuted;
         public SharedDataViewModel SharedSharedDataViewModel { get; private set; }
 
         public MainWindow(SharedDataViewModel SharedDataViewModel = null)
@@ -14,6 +16,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
             InitializeComponent();
             
             SharedSharedDataViewModel = SharedDataViewModel ?? new SharedDataViewModel(new MessageBoxDialogService());
+            DataContext = SharedSharedDataViewModel;
 
             if (SharedSharedDataViewModel.RevitDoc == null)
             {
@@ -30,6 +33,26 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
             ThongSoTab.DataContext = new ThongSoViewModel(SharedSharedDataViewModel);
             KetQuaTab.DataContext = new KetQuaViewModel(SharedSharedDataViewModel);
             Preview3DTab.DataContext = new Preview3DViewModel(SharedSharedDataViewModel);
+        }
+
+        public void QueueStartupAction(string actionName)
+        {
+            _pendingStartupAction = actionName;
+            _startupActionExecuted = false;
+        }
+
+        protected override void OnContentRendered(EventArgs e)
+        {
+            base.OnContentRendered(e);
+            if (_startupActionExecuted || string.IsNullOrWhiteSpace(_pendingStartupAction)) return;
+            _startupActionExecuted = true;
+            string action = _pendingStartupAction;
+            _pendingStartupAction = null;
+            // ContentRendered already runs while IExternalCommand.Execute is on the stack.
+            // Do not leave a Dispatcher callback behind: if WPF initialization fails and
+            // the external command returns, such a callback would later open a Transaction
+            // outside Revit API context and trigger Revit's documented soft-crash path.
+            ExecuteStartupAction(action);
         }
 
         public void Navigate(string tabName)
@@ -58,63 +81,66 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
         /// </summary>
         public void ExecuteStartupAction(string actionName)
         {
-            System.Windows.Input.ICommand cmd = null;
-
-            switch (actionName)
+            try
             {
-                // Lựa Chọn (DuLieuView / SharedDataViewModel)
-                case "SelectComponent":
-                    cmd = SharedSharedDataViewModel.SelectComponentCommand;
-                    break;
-                case "SweepSelectComponent":
-                    cmd = SharedSharedDataViewModel.SweepSelectComponentCommand;
-                    break;
+                if (actionName == "PreviewFast")
+                {
+                    SharedSharedDataViewModel.RequestFastPreview3D();
+                    return;
+                }
 
-                // Dữ Liệu (DuLieuView / SharedDataViewModel)
-                case "SelectGroundFloor":
-                    cmd = SharedSharedDataViewModel.SelectGroundFloorCommand;
-                    break;
-                case "UpdateResults":
-                    cmd = SharedSharedDataViewModel.UpdateResultsCommand;
-                    break;
-                case "RunAnalysis":
-                    cmd = SharedSharedDataViewModel.RunAnalysisCommand;
-                    break;
+                System.Windows.Input.ICommand cmd = null;
+                switch (actionName)
+                {
+                    case "SelectComponent": cmd = SharedSharedDataViewModel.SelectComponentCommand; break;
+                    case "SweepSelectComponent": cmd = SharedSharedDataViewModel.SweepSelectComponentCommand; break;
+                    case "SelectGroundFloor": cmd = SharedSharedDataViewModel.SelectGroundFloorCommand; break;
+                    case "UpdateResults": cmd = SharedSharedDataViewModel.UpdateResultsCommand; break;
+                    case "RunAnalysis": cmd = SharedSharedDataViewModel.RunAnalysisCommand; break;
+                    case "JoinByConstructionSequence": cmd = SharedSharedDataViewModel.JoinByConstructionSequenceCommand; break;
+                    case "NameFormworkComponents": cmd = SharedSharedDataViewModel.NameFormworkComponentsCommand; break;
+                    case "LoadFormworkSharedParameters": cmd = SharedSharedDataViewModel.LoadFormworkSharedParametersCommand; break;
+                    case "InitializeFormworkCalculation": cmd = SharedSharedDataViewModel.InitializeFormworkCalculationCommand; break;
+                    case "CreateFormworkSchedules": cmd = SharedSharedDataViewModel.CreateFormworkSchedulesCommand; break;
+                    case "ExtractFormworkAreas": cmd = SharedSharedDataViewModel.ExtractFormworkAreasCommand; break;
+                    case "RunFullTakeoffWorkflow": cmd = SharedSharedDataViewModel.RunFullTakeoffWorkflowCommand; break;
+                    case "Recalculate":
+                        if (TinhToanTab.DataContext is TinhToanViewModel calculation) cmd = calculation.RecalculateCommand;
+                        break;
+                    case "AutoDesign":
+                        if (TinhToanTab.DataContext is TinhToanViewModel autoDesign) cmd = autoDesign.AutoFixPropsCommand;
+                        break;
+                    case "CreateRevitModel":
+                        if (KetQuaTab.DataContext is KetQuaViewModel model) cmd = model.CreateRevitModelCommand;
+                        break;
+                    case "CalculateAllFloors":
+                        if (KetQuaTab.DataContext is KetQuaViewModel takeoff) cmd = takeoff.CalculateAllFloorsCommand;
+                        break;
+                    case "ExportExcel":
+                        if (KetQuaTab.DataContext is KetQuaViewModel excel) cmd = excel.ExportExcelCommand;
+                        break;
+                    case "SaveSettings":
+                        if (ThongSoTab.DataContext is ThongSoViewModel save) cmd = save.SaveSettingsCommand;
+                        break;
+                    case "ResetSettings":
+                        if (ThongSoTab.DataContext is ThongSoViewModel reset) cmd = reset.ResetSettingsCommand;
+                        break;
+                }
 
-                // Tính Toán (TinhToanView / TinhToanViewModel)
-                case "Recalculate":
-                    if (TinhToanTab.DataContext is TinhToanViewModel tinhToanVm)
-                        cmd = tinhToanVm.RecalculateCommand;
-                    break;
-
-                // Xuất & Mô Hình (KetQuaView / KetQuaViewModel)
-                case "CreateRevitModel":
-                    if (KetQuaTab.DataContext is KetQuaViewModel ketQuaVm1)
-                        cmd = ketQuaVm1.CreateRevitModelCommand;
-                    break;
-                case "CalculateAllFloors":
-                    if (KetQuaTab.DataContext is KetQuaViewModel ketQuaVm2)
-                        cmd = ketQuaVm2.CalculateAllFloorsCommand;
-                    break;
-                case "ExportExcel":
-                    if (KetQuaTab.DataContext is KetQuaViewModel ketQuaVm3)
-                        cmd = ketQuaVm3.ExportExcelCommand;
-                    break;
-
-                // Cài Đặt (ThongSoView / ThongSoViewModel)
-                case "SaveSettings":
-                    if (ThongSoTab.DataContext is ThongSoViewModel thongSoVm1)
-                        cmd = thongSoVm1.SaveSettingsCommand;
-                    break;
-                case "ResetSettings":
-                    if (ThongSoTab.DataContext is ThongSoViewModel thongSoVm2)
-                        cmd = thongSoVm2.ResetSettingsCommand;
-                    break;
-            }
-
-            if (cmd != null && cmd.CanExecute(null))
-            {
+                if (cmd == null)
+                    throw new InvalidOperationException($"Không tìm thấy lệnh giao diện '{actionName}'.");
+                if (!cmd.CanExecute(null))
+                {
+                    MessageBox.Show("Lệnh chưa thể chạy ở trạng thái hiện tại. Hãy kiểm tra cấu kiện đã chọn và dữ liệu đầu vào.",
+                        "Lệnh chưa sẵn sàng", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
                 cmd.Execute(null);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show($"Không thể thực hiện lệnh '{actionName}'.\n\n{exception.Message}",
+                    "Lỗi lệnh Ribbon", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -133,6 +159,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
             if (KetQuaTab.DataContext is IDisposable ketQuaVm)
             {
                 ketQuaVm.Dispose();
+            }
+            if (Preview3DTab.DataContext is IDisposable preview3DVm)
+            {
+                preview3DVm.Dispose();
             }
         }
     }

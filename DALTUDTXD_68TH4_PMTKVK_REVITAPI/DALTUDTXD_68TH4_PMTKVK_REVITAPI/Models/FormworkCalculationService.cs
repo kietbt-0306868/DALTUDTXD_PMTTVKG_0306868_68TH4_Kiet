@@ -209,6 +209,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public double BeamServiceBottomLoad { get; set; }
         public double BeamSideResultantPerMetre { get; set; }
         public double BeamSupportReaction { get; set; }
+        public int BeamBottomPanelStiffenerCount { get; set; }
+        public int BeamSidePanelStiffenerCount { get; set; }
+        public int BeamClampStationCount { get; set; }
+        public string BeamClampLayoutText { get; set; }
         public string BeamLoadPathText { get; set; }
         
         // Column specific
@@ -230,6 +234,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public double ColumnCriticalStiffenerPressure { get; set; }
         public double ColumnCriticalYokeTributaryHeight { get; set; }
         public double ColumnCriticalYokePressure { get; set; }
+        public int ColumnWidthFaceStiffenerCount { get; set; }
+        public int ColumnDepthFaceStiffenerCount { get; set; }
         public int ColumnYokeLevelCount { get; set; }
         public string ColumnYokeLayoutText { get; set; }
         
@@ -295,6 +301,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
 
     public static class FormworkCalculationService
     {
+        // The nested film-faced-plywood family shown in the tutorials arrays its
+        // 50x50 stiffeners with: if(B < 300 mm, 2, B / 300 mm + 1).
+        // Ceiling is used for non-modular widths so the realised bay never exceeds
+        // the requested maximum spacing.
+        public const double MaximumPanelStiffenerSpacingMm = 300.0;
+        public const double TutorialBeamClampEndOffsetMm = 500.0;
         public const double MinimumColumnYokeSpacingMm = 300.0;
         public const double MinimumColumnUpperYokeSpacingMm = 400.0;
         public const double MaximumColumnYokeSpacingMm = 800.0;
@@ -537,7 +549,22 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.BeamServiceBottomLoad = q_tc_bottom;
 
             double width_m = Math.Max(0.05, p.BeamWidth / 1000.0);
-            double secondarySpacing = Math.Max(50.0, p.BeamBottomYokeSpacing);
+            List<double> bottomStiffeners = BuildPanelStiffenerOffsets(
+                p.BeamWidth, p.BeamBottomYokeSpacing);
+            List<double> sideStiffeners = BuildPanelStiffenerOffsets(
+                p.BeamDepth, p.BeamSideYokeSpacing);
+            double secondarySpacing = MaximumBay(bottomStiffeners);
+            double sideSpacing = MaximumBay(sideStiffeners);
+            res.BeamBottomPanelStiffenerCount = bottomStiffeners.Count;
+            res.BeamSidePanelStiffenerCount = sideStiffeners.Count;
+
+            double beamFormworkLength = p.HasIntersectionContext && p.NetFormworkLengthMm > 0
+                ? p.NetFormworkLengthMm
+                : p.BeamLength;
+            List<double> clampStations = BuildBeamClampStations(beamFormworkLength, p.BeamTieRodSpacing);
+            double realisedClampSpacing = MaximumBay(clampStations);
+            res.BeamClampStationCount = clampStations.Count;
+            res.BeamClampLayoutText = string.Join(" - ", clampStations.ConvertAll(x => x.ToString("F0")));
             double primarySpacing = Math.Max(100.0, p.BeamPrimaryWalerSpacing);
             double scaffoldBay = Math.Max(100.0, p.BeamScaffoldBayWidth);
             double mDivPlywood = GetMomentDivisor(p.SoNhipVanMat);
@@ -584,17 +611,17 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             double P_vibrate = p.VibrationLoad * p.LiveLoadSafetyFactor;
             double q_tt_side = P_max_lateral + P_vibrate;
             double q_tc_side = (p.ConcreteWeight) * (p.BeamDepth / 1000.0) + p.VibrationLoad;
-            double M_side = (q_tt_side * Math.Pow(p.BeamSideYokeSpacing, 2)) / mDivPlywood;
+            double M_side = (q_tt_side * Math.Pow(sideSpacing, 2)) / mDivPlywood;
             double plySideStress = M_side / sidePlywood.MomenKhangUon_W;
             res.BeamSidePlywood.StressResult = new KetQuaTinhToan("Ván thành dầm", "Ứng suất uốn", LoaiKiemTra.CuongDoUon, "σ=M/W ≤ R_u", plySideStress, plyLimit, "MPa");
-            double V_side = shearCoeffPlywood * q_tt_side * p.BeamSideYokeSpacing / 1000.0;
+            double V_side = shearCoeffPlywood * q_tt_side * sideSpacing / 1000.0;
             res.BeamSidePlywood.ShearResult = new KetQuaTinhToan("Ván thành dầm", "Ứng suất cắt", LoaiKiemTra.CuongDoCat, "τ=1,5V/(b·t) ≤ R_v", 1.5 * V_side * 1000.0 / sidePlywood.DienTichMatCat_A, p.WoodShearStrength, "MPa");
-            double plySideDef = (5.0 * q_tc_side * Math.Pow(p.BeamSideYokeSpacing, 4)) / (384.0 * p.ElasticModulus * sidePlywood.MomenQuanTinh_I);
-            double plyDefLimitSide = p.SlabDeflectionLimitRatio > 0 ? p.BeamSideYokeSpacing * p.SlabDeflectionLimitRatio : 2.0;
+            double plySideDef = (5.0 * q_tc_side * Math.Pow(sideSpacing, 4)) / (384.0 * p.ElasticModulus * sidePlywood.MomenQuanTinh_I);
+            double plyDefLimitSide = p.SlabDeflectionLimitRatio > 0 ? sideSpacing * p.SlabDeflectionLimitRatio : 2.0;
             res.BeamSidePlywood.DeflectionResult = new KetQuaTinhToan("Ván thành dầm", "Độ võng", LoaiKiemTra.DoVong, "f=5q_sL⁴/(384EI) ≤ L/400", plySideDef, plyDefLimitSide, "mm");
 
-            double q_yoke_side_tt = q_tt_side * (p.BeamSideYokeSpacing / 1000.0); // kN/m
-            double q_yoke_side_tc = q_tc_side * (p.BeamSideYokeSpacing / 1000.0);
+            double q_yoke_side_tt = q_tt_side * (sideSpacing / 1000.0); // kN/m
+            double q_yoke_side_tc = q_tc_side * (sideSpacing / 1000.0);
             double M_yoke_side = q_yoke_side_tt * Math.Pow(p.BeamDepth, 2) / 8.0;
             double sideYokeStress = M_yoke_side / sideYoke.MomenKhangUon_W;
             res.BeamSideYoke.StressResult = new KetQuaTinhToan("Gông/nẹp thành dầm", "Ứng suất uốn", LoaiKiemTra.CuongDoUon, "σ=M/W; M=qL²/8 ≤ R_u", sideYokeStress, woodLimit, "MPa");
@@ -608,7 +635,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             double horizontalResultant = 0.5 * p.ConcreteWeight * p.DeadLoadSafetyFactor * beamDepthM * beamDepthM +
                                          p.VibrationLoad * p.LiveLoadSafetyFactor * beamDepthM;
             res.BeamSideResultantPerMetre = horizontalResultant;
-            double tieDemand = horizontalResultant * Math.Max(0.1, p.BeamTieRodSpacing / 1000.0);
+            double tieDemand = horizontalResultant * Math.Max(0.1, realisedClampSpacing / 1000.0);
             res.BeamTieRod.StressResult = new KetQuaTinhToan($"Ty giằng thành dầm D{p.BeamTieRodDiameter:F0}", "Khả năng chịu kéo", LoaiKiemTra.ChiuLucDoc, "T=H_d·s_ty ≤ [T]", tieDemand, Math.Max(0.1, p.BeamTieRodAllowableCapacity), "kN");
             if (p.BeamPlacementModeIndex == 2)
             {
@@ -646,7 +673,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.BeamStripping.StressResult = new KetQuaTinhToan("Tháo cốp pha dầm/sàn", "Ngưỡng cường độ bê tông", LoaiKiemTra.Khac, "70%/β_tháo ≤ 1,00 (chỉ tháo khi có kết quả nghiệm thu)", strippingRatio, 1.0, "-");
             double overlapDeviation = Math.Max(0.0, Math.Max(50.0 - p.BeamVibratorOverlap, p.BeamVibratorOverlap - 100.0));
             res.BeamVibrationProcedure.StressResult = new KetQuaTinhToan("Đầm dùi bê tông", "Độ chồng vùng đầm", LoaiKiemTra.Khac, "1+max(50-a; a-100; 0) ≤ 1", 1.0 + overlapDeviation, 1.0, "-");
-            res.BeamLoadPathText = $"Ván phủ phim → xà gồ phụ {p.BeamSecondaryJoistWidth:F0}×{p.BeamSecondaryJoistDepth:F0} @ {secondarySpacing:F0} → xà gồ chính {p.BeamPrimaryWalerWidth:F0}×{p.BeamPrimaryWalerDepth:F0} @ {primarySpacing:F0} → đầu U/Ringlock {scaffoldBay:F0} → bản đế/tấm kê";
+            res.BeamLoadPathText = $"Ván phủ phim → {res.BeamBottomPanelStiffenerCount} xà gồ phụ {p.BeamSecondaryJoistWidth:F0}×{p.BeamSecondaryJoistDepth:F0} đáy @≤{secondarySpacing:F0} → xà gồ chính {p.BeamPrimaryWalerWidth:F0}×{p.BeamPrimaryWalerDepth:F0} @ {primarySpacing:F0} → đầu U/Ringlock {scaffoldBay:F0} → bản đế/tấm kê; thành dầm {res.BeamSidePanelStiffenerCount} nẹp @≤{sideSpacing:F0}; {res.BeamClampStationCount} vị trí gông tại [{res.BeamClampLayoutText}] mm";
 
             string prefix = !string.IsNullOrEmpty(p.SelectedFloorDetailName) ? $"[{p.SelectedFloorDetailName}] " : "";
             res.ReportItems.Add(BuildReportItem(prefix, "Ván đáy: Kiểm tra ứng suất", res.BeamBottomPlywood.StressResult, p.IsBeamSelected));
@@ -679,6 +706,57 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                              sideRestraintOk && res.BeamStripping.IsOk && res.BeamVibrationProcedure.IsOk &&
                              IsVerticalSupportSystemOk(res);
             return res;
+        }
+
+        public static int CalculatePanelStiffenerCount(double panelWidthMm,
+            double maximumSpacingMm = MaximumPanelStiffenerSpacingMm)
+        {
+            double width = IsFinitePositive(panelWidthMm) ? panelWidthMm : 1.0;
+            double spacing = IsFinitePositive(maximumSpacingMm)
+                ? Math.Min(MaximumPanelStiffenerSpacingMm, Math.Max(50.0, maximumSpacingMm))
+                : MaximumPanelStiffenerSpacingMm;
+            return Math.Max(2, (int)Math.Ceiling(width / spacing) + 1);
+        }
+
+        public static List<double> BuildPanelStiffenerOffsets(double panelWidthMm,
+            double maximumSpacingMm = MaximumPanelStiffenerSpacingMm)
+        {
+            double width = IsFinitePositive(panelWidthMm) ? panelWidthMm : 1.0;
+            int count = CalculatePanelStiffenerCount(width, maximumSpacingMm);
+            var offsets = new List<double>(count);
+            for (int index = 0; index < count; index++)
+                offsets.Add(-width / 2.0 + width * index / (count - 1));
+            return offsets;
+        }
+
+        public static List<double> BuildBeamClampStations(double beamLengthMm, double maximumSpacingMm)
+        {
+            double length = IsFinitePositive(beamLengthMm) ? beamLengthMm : 1.0;
+            double spacing = IsFinitePositive(maximumSpacingMm) ? Math.Max(100.0, maximumSpacingMm) : 1200.0;
+
+            // L1/L2 are 500 mm in the updated master-family workflow. Short beams
+            // retain two distinct stations at their quarter points.
+            double endOffset = Math.Min(TutorialBeamClampEndOffsetMm, length / 4.0);
+            double first = endOffset;
+            double last = length - endOffset;
+            double usableLength = Math.Max(0.0, last - first);
+            int bayCount = Math.Max(1, (int)Math.Ceiling(usableLength / spacing));
+            var stations = new List<double>(bayCount + 1);
+            for (int bay = 0; bay <= bayCount; bay++)
+                stations.Add(first + usableLength * bay / bayCount);
+            return stations;
+        }
+
+        private static bool IsFinitePositive(double value) =>
+            !double.IsNaN(value) && !double.IsInfinity(value) && value > 0.0;
+
+        private static double MaximumBay(IReadOnlyList<double> positions)
+        {
+            if (positions == null || positions.Count < 2) return 1.0;
+            double maximum = 0.0;
+            for (int index = 1; index < positions.Count; index++)
+                maximum = Math.Max(maximum, positions[index] - positions[index - 1]);
+            return Math.Max(1.0, maximum);
         }
 
         public static List<double> BuildColumnYokeElevations(CalculationParameters p)
@@ -784,7 +862,13 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             double plywoodThickness = Math.Max(1.0, p.ColumnPlywoodThickness);
             double stiffenerWidth = Math.Max(1.0, p.ColumnStiffenerWidth);
             double stiffenerDepth = Math.Max(1.0, p.ColumnStiffenerDepth);
-            double stiffenerSpacing = Math.Max(100.0, p.ColumnStiffenerSpacing);
+            List<double> widthFaceStiffeners = BuildPanelStiffenerOffsets(
+                p.ColumnWidth, p.ColumnStiffenerSpacing);
+            List<double> depthFaceStiffeners = BuildPanelStiffenerOffsets(
+                p.ColumnDepth, p.ColumnStiffenerSpacing);
+            double stiffenerSpacing = Math.Max(MaximumBay(widthFaceStiffeners), MaximumBay(depthFaceStiffeners));
+            res.ColumnWidthFaceStiffenerCount = widthFaceStiffeners.Count;
+            res.ColumnDepthFaceStiffenerCount = depthFaceStiffeners.Count;
             double yokeWidth = Math.Max(10.0, p.ColumnYokeWidth);
             double yokeHeight = Math.Max(10.0, p.ColumnYokeHeight);
             double yokeThickness = Math.Min(Math.Max(1.0, p.ColumnYokeThickness), Math.Min(yokeWidth, yokeHeight) / 2.0 - 0.1);

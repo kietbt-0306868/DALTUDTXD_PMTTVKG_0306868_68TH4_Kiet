@@ -7,15 +7,65 @@
         Background="White" FontFamily="Segoe UI" FontSize="12"
         WindowStartupLocation="CenterScreen">
 
+    <Window.Resources>
+        <Style x:Key="WorkflowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#334155"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E0F2FE"/>
+                    <Setter Property="BorderBrush" Value="#0284C7"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="43*"/>
-            <ColumnDefinition Width="307*"/>
-        </Grid.ColumnDefinitions>
-        <views:DuLieuView x:Name="DuLieuTab" Visibility="Visible" Grid.ColumnSpan="2" />
-        <views:TinhToanView x:Name="TinhToanTab" Visibility="Collapsed" Grid.ColumnSpan="2" />
-        <views:ThongSoView x:Name="ThongSoTab" Visibility="Collapsed" Grid.ColumnSpan="2" />
-        <views:KetQuaView x:Name="KetQuaTab" Visibility="Collapsed" Grid.ColumnSpan="2" />
-        <views:Preview3DView x:Name="Preview3DTab" Visibility="Collapsed" Grid.ColumnSpan="2" />
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#CBD5E1"
+                BorderThickness="0,0,0,1" Padding="12,8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                    <Button Style="{StaticResource WorkflowButtonStyle}" Content="1  Chọn &amp; phân nhóm cấu kiện"
+                            Command="{Binding ChangeTabCommand}" CommandParameter="DuLieuView"/>
+                    <Button Style="{StaticResource WorkflowButtonStyle}" Content="2  Khai báo thông số"
+                            Command="{Binding ChangeTabCommand}" CommandParameter="ThongSoView"/>
+                    <Button Style="{StaticResource WorkflowButtonStyle}" Content="3  Tính toán &amp; thiết kế đạt chuẩn"
+                            Command="{Binding ChangeTabCommand}" CommandParameter="TinhToanView"/>
+                    <Button Style="{StaticResource WorkflowButtonStyle}" Content="4  Thống kê"
+                            Command="{Binding ChangeTabCommand}" CommandParameter="KetQuaView"/>
+                    <Button Style="{StaticResource WorkflowButtonStyle}" Content="5  Diễn họa 3D (tùy chọn)"
+                            Command="{Binding OpenFastPreviewCommand}"/>
+                </StackPanel>
+                <DockPanel Grid.Row="1" Margin="1,7,0,0">
+                    <TextBlock DockPanel.Dock="Right" Text="3D không phải điều kiện để lập tiên lượng"
+                               Foreground="#64748B" FontStyle="Italic" Margin="12,0,0,0"/>
+                    <TextBlock Text="{Binding WorkflowStatusText}" Foreground="#0F766E"
+                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <views:DuLieuView x:Name="DuLieuTab" Visibility="Visible" />
+            <views:TinhToanView x:Name="TinhToanTab" Visibility="Collapsed" />
+            <views:ThongSoView x:Name="ThongSoTab" Visibility="Collapsed" />
+            <views:KetQuaView x:Name="KetQuaTab" Visibility="Collapsed" />
+            <views:Preview3DView x:Name="Preview3DTab" Visibility="Collapsed" />
+        </Grid>
     </Grid>
 </Window>

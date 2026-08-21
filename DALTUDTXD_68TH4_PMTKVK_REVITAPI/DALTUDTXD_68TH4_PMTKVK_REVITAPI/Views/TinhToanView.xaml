@@ -498,10 +498,10 @@
                         <!-- Vùng hiển thị Revit PreviewControl -->
                         <ContentControl Grid.Row="1" Content="{Binding ProjectPreview}" Margin="5"/>
 
-                        <!-- Danh sách các sàn đã chọn (Dạng Thẻ) -->
+                        <!-- Danh sách mọi cấu kiện kết cấu đã chọn (Dạng Thẻ) -->
                         <Border Grid.Row="2" BorderBrush="#ABB2B9" BorderThickness="0,1,0,0" Background="White" Padding="10,10,10,5">
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="DANH SÁCH SÀN ĐÃ CHỌN" Foreground="#2C3E50" FontWeight="Bold" FontSize="13" Margin="0,0,0,8"/>
+                                <TextBlock DockPanel.Dock="Top" Text="DANH SÁCH CẤU KIỆN ĐÃ CHỌN" Foreground="#2C3E50" FontWeight="Bold" FontSize="13" Margin="0,0,0,8"/>
                                 
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,5,0" MaxHeight="220">
                                     <ItemsControl ItemsSource="{Binding FloorElements}">
@@ -538,26 +538,23 @@
                                                                     <TextBlock Text="{Binding ElementId, StringFormat='ID: {0}'}" FontSize="12" Foreground="#7F8C8D" FontWeight="SemiBold" />
                                                                 </Border>
                                                                 
+                                                                <Border DockPanel.Dock="Left" Background="#E8F4FD" CornerRadius="3" Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding ComponentTypeLabel}" FontSize="10" FontWeight="Bold" Foreground="#1D4ED8"/>
+                                                                </Border>
+
                                                                 <!-- Tên phần tử -->
                                                                 <TextBlock Text="{Binding FamilyTypeName}" FontSize="13" FontWeight="Bold" Foreground="#2C3E50" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                                             </DockPanel>
 
-                                                            <WrapPanel Grid.Row="1" Orientation="Horizontal">
+                                                            <StackPanel Grid.Row="1">
+                                                                <WrapPanel Orientation="Horizontal">
                                                                 <StackPanel Orientation="Horizontal" Margin="0,0,15,0">
                                                                     <TextBlock Text="Tầng: " Foreground="#7F8C8D" FontSize="11"/>
                                                                     <TextBlock Text="{Binding Level}" FontWeight="SemiBold" Foreground="#34495E" FontSize="11"/>
                                                                 </StackPanel>
-
-                                                                <StackPanel Orientation="Horizontal" Margin="0,0,15,0">
-                                                                    <TextBlock Text="Diện tích: " Foreground="#7F8C8D" FontSize="11"/>
-                                                                    <TextBlock Text="{Binding Area, StringFormat='{}{0:F2} m²'}" FontWeight="SemiBold" Foreground="#34495E" FontSize="11"/>
-                                                                </StackPanel>
-
-                                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                                                                    <TextBlock Text="Chiều dày: " Foreground="#7F8C8D" FontSize="11"/>
-                                                                    <TextBlock Text="{Binding Thickness, StringFormat='{}{0:F0} mm'}" FontWeight="SemiBold" Foreground="#34495E" FontSize="11"/>
-                                                                </StackPanel>
-                                                            </WrapPanel>
+                                                                </WrapPanel>
+                                                                <TextBlock Text="{Binding CalculationGeometrySummary}" Foreground="#475569" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                            </StackPanel>
                                                         </Grid>
                                                     </Grid>
                                                 </Border>
@@ -573,7 +570,7 @@
 
             <!-- Thanh Trạng Thái -->
             <StatusBar Grid.Row="3" Background="#F8F9F9" BorderBrush="#D5DBDB" BorderThickness="0,1,0,0">
-                <StatusBarItem Content="Ván khuôn sàn"/>
+                <StatusBarItem Content="Tính toán ván khuôn cấu kiện"/>
                 <Separator/>
                 <StatusBarItem Content="{Binding RevitVersionStatus}"/>
             </StatusBar>
