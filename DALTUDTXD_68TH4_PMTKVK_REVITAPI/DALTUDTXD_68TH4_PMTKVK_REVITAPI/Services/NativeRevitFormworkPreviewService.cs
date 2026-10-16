@@ -45,8 +45,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
             if (detailedAccessories)
             {
                 var braceAssessmentBuilder = new ProjectFormworkPreviewBuilder(sharedData);
-                reportProgress?.Invoke(5, "Đang phân tích hình học và vị trí chân chống...");
-                braceAssessmentBuilder.RefreshColumnBraceAssessmentsOnly();
+                if (components.Any(item => item.Type == StructuralComponentType.Column))
+                {
+                    reportProgress?.Invoke(5, "Đang phân tích hình học và vị trí chống cột...");
+                    braceAssessmentBuilder.RefreshColumnBraceAssessmentsOnly();
+                }
                 ThrowIfCancelled(isCancellationRequested);
                 accessoryService = new NativeRevitAccessoryFamilyService(document, sharedData, componentModels,
                     braceAssessmentBuilder.CoordinateOriginMm);
@@ -63,6 +66,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
             }
 
             View3D previewView;
+            Dictionary<long, BoundingBoxXYZ> componentBoxes = components
+                .GroupBy(item => item.Element.Id.Value)
+                .ToDictionary(group => group.Key, group => group.First().Element.get_BoundingBox(null));
             int created = 0;
             int accessoryShapeCount = 0;
             var accessories = new NativeRevitAccessoryFamilyService.PlacementResult();
@@ -84,7 +90,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
                     .Cast<FillPatternElement>()
                     .FirstOrDefault(item => item.GetFillPattern()?.IsSolidFill == true);
                 OverrideGraphicSettings formworkGraphics = CreateFormworkGraphics(solidFill);
-                OverrideGraphicSettings accessoryGraphics = CreateAccessoryGraphics(solidFill);
+                IReadOnlyDictionary<AccessoryVisualKind, OverrideGraphicSettings> accessoryGraphics =
+                    CreateAccessoryGraphics(solidFill);
                 var quickGeometryBatch = new List<GeometryObject>();
                 int quickBatchNumber = 0;
                 var quickAccessoryShapes = new List<DirectShape>();
@@ -103,10 +110,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
                             UnitUtils.ConvertToInternalUnits(18, UnitTypeId.Millimeters));
                     if (detailedAccessories)
                     {
-                        BoundingBoxXYZ elementBox = element.get_BoundingBox(null);
+                        componentBoxes.TryGetValue(element.Id.Value, out BoundingBoxXYZ elementBox);
                         IEnumerable<Element> touchingElements = components
                             .Where(item => item.Element.Id != element.Id &&
-                                           BoxesOverlap(elementBox, item.Element.get_BoundingBox(null)))
+                                           componentBoxes.TryGetValue(item.Element.Id.Value,
+                                               out BoundingBoxXYZ candidateBox) &&
+                                           BoxesOverlap(elementBox, candidateBox))
                             .Select(item => item.Element);
                         panels = RevitFormworkService.SubtractIntersectingSolids(panels, touchingElements);
                     }
@@ -173,19 +182,22 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
                     accessories = quickAccessoryResult.Counts;
 
                     const int accessoryBatchSize = 128;
-                    for (int start = 0; start < quickAccessoryResult.Solids.Count;
-                         start += accessoryBatchSize)
+                    foreach (KeyValuePair<AccessoryVisualKind, List<Solid>> visualGroup in
+                             quickAccessoryResult.SolidsByKind.Where(group => group.Value.Count > 0))
                     {
-                        ThrowIfCancelled(isCancellationRequested);
-                        accessoryShapeCount++;
-                        List<GeometryObject> batch = quickAccessoryResult.Solids
-                            .Skip(start).Take(accessoryBatchSize).Cast<GeometryObject>().ToList();
-                        DirectShape shape = CreatePreviewShape(document, batch,
-                            $"FAST_ACCESSORY|{accessoryShapeCount}",
-                            $"VK Phụ kiện preview nhanh - cụm {accessoryShapeCount}");
-                        previewView.SetElementOverrides(shape.Id, accessoryGraphics);
-                        previewElementIds.Add(shape.Id);
-                        quickAccessoryShapes.Add(shape);
+                        for (int start = 0; start < visualGroup.Value.Count; start += accessoryBatchSize)
+                        {
+                            ThrowIfCancelled(isCancellationRequested);
+                            accessoryShapeCount++;
+                            List<GeometryObject> batch = visualGroup.Value
+                                .Skip(start).Take(accessoryBatchSize).Cast<GeometryObject>().ToList();
+                            DirectShape shape = CreatePreviewShape(document, batch,
+                                $"FAST_ACCESSORY|{visualGroup.Key}|{accessoryShapeCount}",
+                                $"VK {AccessoryKindLabel(visualGroup.Key)} - cụm {accessoryShapeCount}");
+                            previewView.SetElementOverrides(shape.Id, accessoryGraphics[visualGroup.Key]);
+                            previewElementIds.Add(shape.Id);
+                            quickAccessoryShapes.Add(shape);
+                        }
                     }
                 }
 
@@ -220,9 +232,37 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
             string quickCapText = quickAccessoryResult?.IsDisplayCapped == true
                 ? $" · LOD phụ kiện đã dừng ở {quickAccessoryResult.Solids.Count:N0} khối để bảo vệ hiệu năng"
                 : string.Empty;
+            string quickSlabLodText = quickAccessoryResult?.ReducedSlabCount > 0
+                ? $" · lưới chống preview được phân bổ đều cho {quickAccessoryResult.ReducedSlabCount} sàn lớn"
+                : string.Empty;
             string quickWarningText = quickAccessoryResult != null && quickAccessoryResult.Warnings.Count > 0
                 ? $" · bỏ qua {quickAccessoryResult.Warnings.Count} cấu kiện phụ kiện lỗi hình học"
                 : string.Empty;
+            string familyInitializationText = accessoryService == null
+                ? string.Empty
+                : $" · khởi tạo family: dùng lại {accessoryService.ReusedProjectFamilyCount}, " +
+                  $"nạp cache {accessoryService.LoadedCachedFamilyCount}, tạo mới {accessoryService.GeneratedFamilyCount}";
+            string shoringCutoffText = accessories.ShoringSuppressedComponentCount > 0
+                ? $" · không bố trí hệ chống cho {accessories.ShoringSuppressedComponentCount} cấu kiện tại/dưới tầng trệt"
+                : string.Empty;
+            string unsupportedShoringText = accessories.UnsupportedShoringPointCount > 0
+                ? $" · đã loại {accessories.UnsupportedShoringPointCount} vị trí chống không có mặt tựa thực tế"
+                : string.Empty;
+            string columnBraceCoverageText = accessories.ColumnBraceSegmentCount > 0
+                ? $" · chống ổn định cột: {accessories.ColumnBraceCoveredSegmentCount}/" +
+                  $"{accessories.ColumnBraceSegmentCount} phân đoạn đủ ≥2 phương độc lập" +
+                  (accessories.ColumnBraceUnderRestrainedSegmentCount > 0
+                      ? $" · CẢNH BÁO {accessories.ColumnBraceUnderRestrainedSegmentCount} phân đoạn chưa đủ phương" +
+                        $" ({accessories.ColumnBraceUnrestrainedSegmentCount} chưa có chống/neo; ID " +
+                        $"{string.Join(",", accessories.UnderRestrainedColumnIds.Take(8))}" +
+                        (accessories.UnderRestrainedColumnIds.Count > 8 ? ",…" : string.Empty) + ")"
+                      : string.Empty)
+                : string.Empty;
+            string scaffoldSystemText = sharedData?.SelectedScaffoldSystemsSummary ??
+                                        ScaffoldSystemType.Ringlock.ToDisplayText();
+            string scaffoldPreviewText = detailedAccessories
+                ? $"hệ giàn giáo: {scaffoldSystemText} (phân vùng theo tầng thi công)"
+                : $"hệ giàn giáo đã chọn: {scaffoldSystemText} (hình học hệ được dựng ở chế độ Family chi tiết)";
             return new Result
             {
                 ViewId = previewView.Id,
@@ -232,18 +272,26 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
                 Summary = (detailedAccessories ? "Mô hình chi tiết" : "Preview nhanh") +
                           $" · Revit nguyên bản · {components.Count} cấu kiện kết cấu · " +
                           $"{created} cụm ván khuôn · {accessoryShapeCount} cụm phụ kiện · " +
+                          $"{scaffoldPreviewText} · " +
                           $"{accessories.PropCount} cây chống {accessoryKind} · " +
-                          $"{accessories.ScaffoldBraceCount} cụm giằng X giàn giáo {accessoryKind} · " +
+                          $"{accessories.ScaffoldBraceCount} khoang giàn giáo {accessoryKind} · " +
                           $"{accessories.BeamClampCount} gông ty dầm {accessoryKind} · " +
+                          $"{accessories.BeamSurfaceTieRodCount} ty chết mặt dầm biên {accessoryKind} · " +
+                          $"{accessories.BeamSideBraceCount} chống xiên ngoài dầm biên {accessoryKind} · " +
                           $"{accessories.ColumnYokeCount} gông cột {accessoryKind} · " +
                           $"{accessories.ColumnTieRodCount} ty ren + bát chuồn {accessoryKind} · " +
-                          $"{accessories.PushPullPropCount} chống xiên {accessoryKind} · " +
+                          $"{accessories.PushPullPropCount} chống đẩy-kéo cột {accessoryKind} · " +
                           $"{accessories.TurnbuckleCount} cáp + tăng đơ {accessoryKind} · view {PreviewViewName}" +
                           quickCapText +
+                          quickSlabLodText +
                           quickWarningText +
+                          familyInitializationText +
+                          shoringCutoffText +
+                          unsupportedShoringText +
+                          columnBraceCoverageText +
                           (accessoryService == null || accessoryService.Warnings.Count == 0
                               ? string.Empty
-                              : $" · cảnh báo {accessoryService.Warnings.Count} family không nạp được")
+                              : $" · {accessoryService.Warnings.Count} cảnh báo bố trí/phụ kiện")
             };
         }
 
@@ -283,6 +331,19 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
             }
         }
 
+        public static void PrepareEditablePreviewView(Document document, View3D previewView)
+        {
+            if (document == null || previewView == null || document.IsReadOnly) return;
+            List<ElementId> ids = OwnedPreviewElementIds(document);
+            if (ids.Count == 0) return;
+            using (var transaction = new Transaction(document, "Cô lập Family trong view Preview 3D"))
+            {
+                transaction.Start();
+                RestrictPreviewElementsToDedicatedView(document, previewView, ids);
+                transaction.Commit();
+            }
+        }
+
         private static IEnumerable<(Element Element, StructuralComponentType Type)> ResolveComponents(
             Document document, IEnumerable<FloorElementModel> selectedComponents)
         {
@@ -305,6 +366,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
                 BuiltInCategory.OST_Floors,
                 BuiltInCategory.OST_StructuralFraming,
                 BuiltInCategory.OST_StructuralColumns,
+                BuiltInCategory.OST_Columns,
                 BuiltInCategory.OST_StructuralFoundation
             };
             foreach (Element element in new FilteredElementCollector(document)
@@ -321,7 +383,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
         {
             BuiltInCategory category = element.Category?.BuiltInCategory ?? BuiltInCategory.INVALID;
             if (category == BuiltInCategory.OST_StructuralFraming) return StructuralComponentType.Beam;
-            if (category == BuiltInCategory.OST_StructuralColumns) return StructuralComponentType.Column;
+            if (category == BuiltInCategory.OST_StructuralColumns ||
+                category == BuiltInCategory.OST_Columns) return StructuralComponentType.Column;
             if (category == BuiltInCategory.OST_StructuralFoundation) return StructuralComponentType.Foundation;
             if (element is Floor floor && document.GetElement(floor.GetTypeId()) is FloorType floorType &&
                 floorType.IsFoundationSlab) return StructuralComponentType.Foundation;
@@ -467,19 +530,47 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services
             return graphics;
         }
 
-        private static OverrideGraphicSettings CreateAccessoryGraphics(FillPatternElement solidFill)
+        private static IReadOnlyDictionary<AccessoryVisualKind, OverrideGraphicSettings>
+            CreateAccessoryGraphics(FillPatternElement solidFill)
         {
-            var graphics = new OverrideGraphicSettings();
-            var face = new Autodesk.Revit.DB.Color(45, 105, 175);
-            graphics.SetProjectionLineColor(new Autodesk.Revit.DB.Color(20, 65, 120));
-            graphics.SetProjectionLineWeight(3);
-            graphics.SetSurfaceTransparency(4);
-            if (solidFill != null)
+            OverrideGraphicSettings Create(byte red, byte green, byte blue,
+                byte edgeRed, byte edgeGreen, byte edgeBlue)
             {
-                graphics.SetSurfaceForegroundPatternId(solidFill.Id);
-                graphics.SetSurfaceForegroundPatternColor(face);
+                var graphics = new OverrideGraphicSettings();
+                graphics.SetProjectionLineColor(new Autodesk.Revit.DB.Color(edgeRed, edgeGreen, edgeBlue));
+                graphics.SetProjectionLineWeight(3);
+                graphics.SetSurfaceTransparency(4);
+                if (solidFill != null)
+                {
+                    graphics.SetSurfaceForegroundPatternId(solidFill.Id);
+                    graphics.SetSurfaceForegroundPatternColor(new Autodesk.Revit.DB.Color(red, green, blue));
+                }
+                return graphics;
             }
-            return graphics;
+
+            return new Dictionary<AccessoryVisualKind, OverrideGraphicSettings>
+            {
+                [AccessoryVisualKind.Support] = Create(37, 99, 235, 29, 78, 216),
+                [AccessoryVisualKind.Clamp] = Create(249, 115, 22, 194, 65, 12),
+                [AccessoryVisualKind.TieRod] = Create(147, 51, 234, 107, 33, 168),
+                [AccessoryVisualKind.Brace] = Create(22, 163, 74, 21, 128, 61),
+                [AccessoryVisualKind.ScaffoldBrace] = Create(22, 163, 74, 21, 128, 61),
+                [AccessoryVisualKind.PushPullProp] = Create(6, 182, 212, 14, 116, 144)
+            };
+        }
+
+        private static string AccessoryKindLabel(AccessoryVisualKind kind)
+        {
+            switch (kind)
+            {
+                case AccessoryVisualKind.Support: return "Cây chống";
+                case AccessoryVisualKind.Clamp: return "Gông và kẹp";
+                case AccessoryVisualKind.TieRod: return "Ty ren và tăng đơ";
+                case AccessoryVisualKind.Brace: return "Giằng và chống xiên";
+                case AccessoryVisualKind.ScaffoldBrace: return "Giằng chéo giàn giáo";
+                case AccessoryVisualKind.PushPullProp: return "Chống đẩy-kéo cột";
+                default: return "Phụ kiện";
+            }
         }
 
         private static void ConfigurePreviewView(View3D view, IEnumerable<Element> elements)

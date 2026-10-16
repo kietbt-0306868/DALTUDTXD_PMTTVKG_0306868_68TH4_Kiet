@@ -29,6 +29,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public int DirectionIndex { get; set; }
         public Vector3D LocalDirection { get; set; }
         public Point3D ProposedFootPoint { get; set; }
+        public double ResolvedRunMm { get; set; }
         public BraceFootSupportKind SupportKind { get; set; }
         public bool WasRenderedAsProp { get; set; }
         public bool WasResolvedByAlternativeRestraint { get; set; }

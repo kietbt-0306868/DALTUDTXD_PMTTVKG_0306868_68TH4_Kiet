@@ -413,6 +413,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 SupportHeadBearingAllowable = _SharedDataViewModel.SupportHeadBearingAllowable,
                 SupportJackExtension = _SharedDataViewModel.SupportJackExtension,
                 SupportJackExtensionLimit = _SharedDataViewModel.SupportJackExtensionLimit,
+                SelectedScaffoldSystems = _SharedDataViewModel.SelectedScaffoldSystems,
                 SoNhipVanMat = _SharedDataViewModel.SoNhipVanMat,
                 SoNhipXaGoPhu = _SharedDataViewModel.SoNhipXaGoPhu,
                 SoNhipXaGoChinh = _SharedDataViewModel.SoNhipXaGoChinh,
@@ -440,6 +441,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 BeamTieRodDiameter = _SharedDataViewModel.BeamTieRodDiameter,
                 BeamTieRodSpacing = _SharedDataViewModel.BeamTieRodSpacing,
                 BeamTieRodAllowableCapacity = _SharedDataViewModel.BeamTieRodAllowableCapacity,
+                BeamEdgeSurfaceTieRodDiameter = _SharedDataViewModel.BeamEdgeSurfaceTieRodDiameter,
+                BeamEdgeSurfaceTieRodSpacing = _SharedDataViewModel.BeamEdgeSurfaceTieRodSpacing,
+                BeamEdgeSurfaceTieRodAnchorLength = _SharedDataViewModel.BeamEdgeSurfaceTieRodAnchorLength,
+                BeamEdgeSurfaceTieRodAllowableCapacity = _SharedDataViewModel.BeamEdgeSurfaceTieRodAllowableCapacity,
                 BeamSideBraceSpacing = _SharedDataViewModel.BeamSideBraceSpacing,
                 BeamSideBraceAngle = _SharedDataViewModel.BeamSideBraceAngle,
                 BeamSideBraceDiameter = _SharedDataViewModel.BeamSideBraceDiameter,
@@ -475,6 +480,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 ColumnTieRodAllowableCapacity = _SharedDataViewModel.ColumnTieRodAllowableCapacity,
                 ColumnBraceCount = _SharedDataViewModel.ColumnBraceCount,
                 ColumnBraceAngle = _SharedDataViewModel.ColumnBraceAngle,
+                ColumnBraceDiameter = _SharedDataViewModel.ColumnBraceDiameter,
+                ColumnBraceThickness = _SharedDataViewModel.ColumnBraceThickness,
                 ColumnBraceAllowableCapacity = _SharedDataViewModel.ColumnBraceAllowableCapacity,
                 ColumnBracePlacementModeIndex = _SharedDataViewModel.ColumnBracePlacementModeIndex,
                 ColumnNeighbourTieThreshold = _SharedDataViewModel.ColumnNeighbourTieThreshold,
@@ -540,7 +547,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 // Summary cards continue to represent the active component even if its
                 // category is temporarily hidden from the combined detailed-check list.
-                p.IsGroundLevel = CurrentComponentType == StructuralComponentType.Foundation;
+                if (CurrentComponentType == StructuralComponentType.Foundation)
+                    p.IsGroundLevel = true;
+                else if (focusedComponent == null && CurrentComponentType == StructuralComponentType.Slab)
+                    p.IsGroundLevel = false;
                 res = CurrentComponentType == StructuralComponentType.Beam
                     ? Models.FormworkCalculationService.CheckBeamSafety(p)
                     : CurrentComponentType == StructuralComponentType.Column
@@ -691,15 +701,25 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             else if (CurrentComponentType == StructuralComponentType.Beam)
             {
                 string restraint = p.BeamPlacementModeIndex == 1
-                    ? $"dầm giữa: ty giằng D{p.BeamTieRodDiameter:F0} @ {p.BeamTieRodSpacing:F0} mm"
+                    ? $"dầm giữa: ty giằng xuyên D{p.BeamTieRodDiameter:F0} @ {p.BeamTieRodSpacing:F0} mm"
                     : p.BeamPlacementModeIndex == 2
-                        ? $"dầm biên: chống xiên @ {p.BeamSideBraceSpacing:F0} mm, α={p.BeamSideBraceAngle:F0}°"
-                        : "tự động: kiểm tra cả ty giằng dầm giữa và chống xiên dầm biên";
+                        ? $"dầm biên: ty xuyên D{p.BeamTieRodDiameter:F0} @ {p.BeamTieRodSpacing:F0} mm + ty chết trên mặt D{p.BeamEdgeSurfaceTieRodDiameter:F0} @ {p.BeamEdgeSurfaceTieRodSpacing:F0} mm, L neo {p.BeamEdgeSurfaceTieRodAnchorLength:F0} mm + chống xiên ngoài @ {p.BeamSideBraceSpacing:F0} mm, α={p.BeamSideBraceAngle:F0}°"
+                        : "tự động: mọi dầm có ty xuyên; vị trí biên bổ sung ty chết trên mặt và chống xiên phía ngoài";
                 layoutSummary = $" Chuỗi truyền lực: {res.BeamLoadPathText}. Phản lực nút chống lớn nhất {res.BeamSupportReaction:F2} kN; {restraint}.";
                 SelectedFloorInfo = $"Dầm {p.BeamWidth:F0}×{p.BeamDepth:F0}, L={p.BeamLength:F0} mm | {restraint}";
                 BeamLoadVerification = $"TẢI ĐÁY: q_d=γG[(γ_c+γ_s)h+g_vk]+γQ[q_tc+max(q_đổ,q_đầm)]={res.BeamDesignBottomLoad:F2} kN/m²; q_s={res.BeamServiceBottomLoad:F2} kN/m².";
                 BeamLoadPathVerification = $"TRUYỀN LỰC: {res.BeamLoadPathText}. Mỗi lớp đều kiểm tra uốn σ=M/W và cắt τ=1,5V/A; võng dùng 5qL⁴/(384EI) cho tải đều, PL³/(48EI) cho xà gồ chính chịu tải tập trung. Đầu U nhận N_Ed={res.BeamSupportReaction:F2} kN.";
-                BeamConstructionVerification = $"THÀNH DẦM: H_d=½γGγ_ch²+γQq_đầmh={res.BeamSideResultantPerMetre:F2} kN/m; {restraint}. Trình tự: dựng Ringlock → xà gồ chính → xà gồ phụ → ván phủ phim → cốt thép dầm rồi cốt thép sàn → đổ từ xa đến gần. Chỉ tháo khi bê tông được nghiệm thu ≥{p.BeamStrippingStrengthPercent:F0}% cường độ; vùng đầm chồng {p.BeamVibratorOverlap:F0} mm.";
+                string edgeTieProcedure = p.BeamPlacementModeIndex == 2
+                    ? $" Với dầm biên: xác nhận phía sàn tại từng vị trí → dựng thành ngoài → đặt ty chết D{p.BeamEdgeSurfaceTieRodDiameter:F0} @ {p.BeamEdgeSurfaceTieRodSpacing:F0} mm từ thành ngoài vào phía sàn, neo hữu hiệu ≥{p.BeamEdgeSurfaceTieRodAnchorLength:F0} mm → lắp bản/đĩa neo và siết sau khi cốt thép dầm đã ổn định; tuyệt đối không đặt ty về phía ngoài công trình hoặc qua lỗ sàn."
+                    : string.Empty;
+                ScaffoldSystemType scaffoldSystems = p.SelectedScaffoldSystems.Normalize();
+                bool usesMultipleScaffoldSystems = scaffoldSystems != ScaffoldSystemType.Frame &&
+                                                   scaffoldSystems != ScaffoldSystemType.Wedge &&
+                                                   scaffoldSystems != ScaffoldSystemType.Ringlock;
+                string scaffoldCatalogueNote = usesMultipleScaffoldSystems
+                    ? " Các hệ phải nằm trong những vùng độc lập; sức chịu tải, module và liên kết chuyển tiếp phải xác nhận theo catalogue nhà sản xuất."
+                    : string.Empty;
+                BeamConstructionVerification = $"THÀNH DẦM: H_d=½γGγ_ch²+γQq_đầmh={res.BeamSideResultantPerMetre:F2} kN/m; {restraint}. Trình tự: dựng {scaffoldSystems.ToDisplayText()} → xà gồ chính → xà gồ phụ → ván phủ phim → cốt thép dầm → hệ giữ thành dầm → cốt thép sàn → nghiệm thu và đổ từ xa đến gần.{scaffoldCatalogueNote}{edgeTieProcedure} Chỉ tháo khi bê tông được nghiệm thu ≥{p.BeamStrippingStrengthPercent:F0}% cường độ; vùng đầm chồng {p.BeamVibratorOverlap:F0} mm.";
             }
             List<FloorElementModel> selectedComponents = GetScopedComponents(
                 checkSlab, checkFoundation, checkBeam, checkColumn);
@@ -812,6 +832,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 e.PropertyName == nameof(SharedDataViewModel.SupportHeadBearingAllowable) ||
                 e.PropertyName == nameof(SharedDataViewModel.SupportJackExtension) ||
                 e.PropertyName == nameof(SharedDataViewModel.SupportJackExtensionLimit) ||
+                e.PropertyName == nameof(SharedDataViewModel.SelectedScaffoldSystems) ||
                 e.PropertyName == nameof(SharedDataViewModel.Joist1Spacing) ||
                 e.PropertyName == nameof(SharedDataViewModel.Joist2Spacing) ||
                 e.PropertyName == nameof(SharedDataViewModel.SupportSpacing) ||
@@ -823,6 +844,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 e.PropertyName == nameof(SharedDataViewModel.MoistureFactor) ||
                 e.PropertyName == nameof(SharedDataViewModel.TemperatureFactor) ||
                 e.PropertyName == nameof(SharedDataViewModel.JoistDeflectionLimit) ||
+                e.PropertyName == nameof(SharedDataViewModel.IsGroundLevel) ||
+                e.PropertyName == nameof(SharedDataViewModel.DesignatedGroundLevel) ||
                 e.PropertyName == nameof(SharedDataViewModel.IsFilterSlabChecked) ||
                 e.PropertyName == nameof(SharedDataViewModel.IsFilterFoundationChecked) ||
                 e.PropertyName == nameof(SharedDataViewModel.IsFilterBeamChecked) ||
@@ -847,6 +870,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 e.PropertyName == nameof(SharedDataViewModel.BeamTieRodDiameter) ||
                 e.PropertyName == nameof(SharedDataViewModel.BeamTieRodSpacing) ||
                 e.PropertyName == nameof(SharedDataViewModel.BeamTieRodAllowableCapacity) ||
+                e.PropertyName == nameof(SharedDataViewModel.BeamEdgeSurfaceTieRodDiameter) ||
+                e.PropertyName == nameof(SharedDataViewModel.BeamEdgeSurfaceTieRodSpacing) ||
+                e.PropertyName == nameof(SharedDataViewModel.BeamEdgeSurfaceTieRodAnchorLength) ||
+                e.PropertyName == nameof(SharedDataViewModel.BeamEdgeSurfaceTieRodAllowableCapacity) ||
                 e.PropertyName == nameof(SharedDataViewModel.BeamSideBraceSpacing) ||
                 e.PropertyName == nameof(SharedDataViewModel.BeamSideBraceAngle) ||
                 e.PropertyName == nameof(SharedDataViewModel.BeamSideBraceDiameter) ||
@@ -880,6 +907,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 e.PropertyName == nameof(SharedDataViewModel.ColumnTieRodAllowableCapacity) ||
                 e.PropertyName == nameof(SharedDataViewModel.ColumnBraceCount) ||
                 e.PropertyName == nameof(SharedDataViewModel.ColumnBraceAngle) ||
+                e.PropertyName == nameof(SharedDataViewModel.ColumnBraceDiameter) ||
+                e.PropertyName == nameof(SharedDataViewModel.ColumnBraceThickness) ||
                 e.PropertyName == nameof(SharedDataViewModel.ColumnBraceAllowableCapacity) ||
                 e.PropertyName == nameof(SharedDataViewModel.ColumnBracePlacementModeIndex) ||
                 e.PropertyName == nameof(SharedDataViewModel.ColumnNeighbourTieThreshold) ||
@@ -1018,21 +1047,24 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             if (segments.Count == 0) return;
 
             int supported = segments.Min(segment => segment.Directions.Count(direction => direction.CanPlaceProp));
-            parameters.ColumnSupportedBraceDirectionCount = Math.Max(1, Math.Min(4, supported));
+            // Zero is a real engineering state.  Do not credit a phantom brace when
+            // geometry could not verify any bearing direction.
+            parameters.ColumnSupportedBraceDirectionCount = Math.Max(0, Math.Min(4, supported));
             parameters.ColumnIsBoundaryOrCorner = segments.Any(segment => segment.IsPerimeterForCalculation) || supported < 4;
             parameters.ColumnBracePlacementModeIndex = parameters.ColumnIsBoundaryOrCorner ? 2 : 0;
         }
 
         private static string DesignSignature(FloorElementModel component, CalculationParameters p)
         {
+            int scaffoldSystemMask = (int)p.SelectedScaffoldSystems.Normalize();
             switch (component.ComponentType)
             {
                 case StructuralComponentType.Beam:
-                    return $"B|{p.BeamWidth:F1}|{p.BeamDepth:F1}|{p.BeamLength:F1}|{p.NetFormworkLengthMm:F1}|{p.NetPlywoodAreaM2:F3}|{p.BeamPlacementModeIndex}|{p.BeamBottomPlywoodThickness:F1}|{p.BeamSidePlywoodThickness:F1}|{p.BeamBottomYokeSpacing:F1}|{p.BeamSideYokeSpacing:F1}|{p.BeamPrimaryWalerSpacing:F1}|{p.BeamSecondaryJoistWidth:F1}|{p.BeamSecondaryJoistDepth:F1}|{p.BeamPrimaryWalerWidth:F1}|{p.BeamPrimaryWalerDepth:F1}|{p.BeamPropSpacing:F1}|{p.BeamEdgeSurfaceTieRodDiameter:F1}|{p.BeamEdgeSurfaceTieRodSpacing:F1}|{p.BeamEdgeSurfaceTieRodAnchorLength:F1}";
+                    return $"B|{scaffoldSystemMask}|{p.IsGroundLevel}|{p.BeamWidth:F1}|{p.BeamDepth:F1}|{p.BeamLength:F1}|{p.NetFormworkLengthMm:F1}|{p.NetPlywoodAreaM2:F3}|{p.BeamPlacementModeIndex}|{p.BeamBottomPlywoodThickness:F1}|{p.BeamSidePlywoodThickness:F1}|{p.BeamBottomYokeSpacing:F1}|{p.BeamSideYokeSpacing:F1}|{p.BeamPrimaryWalerSpacing:F1}|{p.BeamSecondaryJoistWidth:F1}|{p.BeamSecondaryJoistDepth:F1}|{p.BeamPrimaryWalerWidth:F1}|{p.BeamPrimaryWalerDepth:F1}|{p.BeamPropSpacing:F1}|{p.BeamScaffoldBayWidth:F1}|{p.BeamEdgeSurfaceTieRodDiameter:F1}|{p.BeamEdgeSurfaceTieRodSpacing:F1}|{p.BeamEdgeSurfaceTieRodAnchorLength:F1}|{p.BeamEdgeSurfaceTieRodAllowableCapacity:F1}";
                 case StructuralComponentType.Column:
-                    return $"C|{p.ColumnWidth:F1}|{p.ColumnDepth:F1}|{p.ColumnHeight:F1}|{p.NetSideFormworkAreaM2:F3}|{p.ColumnIsBoundaryOrCorner}|{p.ColumnSupportedBraceDirectionCount}|{p.ColumnPlywoodThickness:F1}|{p.ColumnStiffenerWidth:F1}|{p.ColumnStiffenerDepth:F1}|{p.ColumnStiffenerSpacing:F1}|{p.ColumnYokeBottomSpacing:F1}|{p.ColumnYokeUpperSpacing:F1}|{p.ColumnYokeWidth:F1}|{p.ColumnYokeHeight:F1}|{p.ColumnYokeThickness:F1}|{p.ColumnTieRodDiameter:F1}|{p.ColumnTieRodCountPerFace}|{p.ColumnBraceCount}";
+                    return $"C|{p.ColumnWidth:F1}|{p.ColumnDepth:F1}|{p.ColumnHeight:F1}|{p.NetSideFormworkAreaM2:F3}|{p.ColumnIsBoundaryOrCorner}|{p.ColumnSupportedBraceDirectionCount}|{p.ColumnPlywoodThickness:F1}|{p.ColumnStiffenerWidth:F1}|{p.ColumnStiffenerDepth:F1}|{p.ColumnStiffenerSpacing:F1}|{p.ColumnYokeBottomSpacing:F1}|{p.ColumnYokeUpperSpacing:F1}|{p.ColumnYokeWidth:F1}|{p.ColumnYokeHeight:F1}|{p.ColumnYokeThickness:F1}|{p.ColumnTieRodDiameter:F1}|{p.ColumnTieRodCountPerFace}|{p.ColumnBraceCount}|{p.ColumnBraceAngle:F1}|{p.ColumnBraceDiameter:F1}|{p.ColumnBraceThickness:F1}|{p.ColumnBraceAllowableCapacity:F1}";
                 default:
-                    return $"F|{component.ComponentType}|{p.SlabThickness:F1}|{p.CayChongHeight:F1}|{p.NetBottomFormworkAreaM2:F3}|{p.NetSideFormworkAreaM2:F3}|{p.NetTopFormworkAreaM2:F3}|{p.VanMatThickness:F1}|{p.Joist1Spacing:F1}|{p.Joist2Spacing:F1}|{p.SupportSpacing:F1}|{p.XaGoPhuWidth:F1}|{p.XaGoPhuHeight:F1}|{p.XaGoChinhWidth:F1}|{p.XaGoChinhHeight:F1}";
+                    return $"F|{scaffoldSystemMask}|{component.ComponentType}|{p.IsGroundLevel}|{p.SlabThickness:F1}|{p.CayChongHeight:F1}|{p.NetBottomFormworkAreaM2:F3}|{p.NetSideFormworkAreaM2:F3}|{p.NetTopFormworkAreaM2:F3}|{p.VanMatThickness:F1}|{p.Joist1Spacing:F1}|{p.Joist2Spacing:F1}|{p.SupportSpacing:F1}|{p.XaGoPhuWidth:F1}|{p.XaGoPhuHeight:F1}|{p.XaGoChinhWidth:F1}|{p.XaGoChinhHeight:F1}";
             }
         }
 
@@ -1077,7 +1109,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                         break;
                     default:
                         prefix = $"SÀN · {identity} · dày {parameters.SlabThickness:F0} mm";
-                        parameters.IsGroundLevel = false;
                         result = FormworkCalculationService.CheckSafety(parameters);
                         break;
                 }
@@ -1170,8 +1201,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                         : template.ColumnHeight);
                     parameters.ColumnIsBoundaryOrCorner = group.Key.IsPerimeter;
                     parameters.ColumnSupportedBraceDirectionCount = group.Min(assessment =>
-                        assessment.Directions.Count(direction =>
-                            direction.SupportKind == Models.BraceFootSupportKind.Slab));
+                        assessment.Directions.Count(direction => direction.CanPlaceProp));
                     parameters.ColumnBracePlacementModeIndex = group.Key.IsPerimeter ? 2 : 0;
 
                     string typeLabel = group.Key.IsPerimeter ? "CỘT BIÊN" : "CỘT GIỮA";
@@ -1243,6 +1273,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 SupportHeadBearingAllowable = _SharedDataViewModel.SupportHeadBearingAllowable,
                 SupportJackExtension = _SharedDataViewModel.SupportJackExtension,
                 SupportJackExtensionLimit = _SharedDataViewModel.SupportJackExtensionLimit,
+                SelectedScaffoldSystems = _SharedDataViewModel.SelectedScaffoldSystems,
                 SoNhipVanMat = _SharedDataViewModel.SoNhipVanMat,
                 SoNhipXaGoPhu = _SharedDataViewModel.SoNhipXaGoPhu,
                 SoNhipXaGoChinh = _SharedDataViewModel.SoNhipXaGoChinh,
@@ -1266,6 +1297,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 BeamTieRodDiameter = _SharedDataViewModel.BeamTieRodDiameter,
                 BeamTieRodSpacing = _SharedDataViewModel.BeamTieRodSpacing,
                 BeamTieRodAllowableCapacity = _SharedDataViewModel.BeamTieRodAllowableCapacity,
+                BeamEdgeSurfaceTieRodDiameter = _SharedDataViewModel.BeamEdgeSurfaceTieRodDiameter,
+                BeamEdgeSurfaceTieRodSpacing = _SharedDataViewModel.BeamEdgeSurfaceTieRodSpacing,
+                BeamEdgeSurfaceTieRodAnchorLength = _SharedDataViewModel.BeamEdgeSurfaceTieRodAnchorLength,
+                BeamEdgeSurfaceTieRodAllowableCapacity = _SharedDataViewModel.BeamEdgeSurfaceTieRodAllowableCapacity,
                 BeamSideBraceSpacing = _SharedDataViewModel.BeamSideBraceSpacing,
                 BeamSideBraceAngle = _SharedDataViewModel.BeamSideBraceAngle,
                 BeamSideBraceDiameter = _SharedDataViewModel.BeamSideBraceDiameter,
@@ -1299,6 +1334,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 ColumnTieRodAllowableCapacity = _SharedDataViewModel.ColumnTieRodAllowableCapacity,
                 ColumnBraceCount = _SharedDataViewModel.ColumnBraceCount,
                 ColumnBraceAngle = _SharedDataViewModel.ColumnBraceAngle,
+                ColumnBraceDiameter = _SharedDataViewModel.ColumnBraceDiameter,
+                ColumnBraceThickness = _SharedDataViewModel.ColumnBraceThickness,
                 ColumnBraceAllowableCapacity = _SharedDataViewModel.ColumnBraceAllowableCapacity,
                 ColumnBracePlacementModeIndex = _SharedDataViewModel.ColumnBracePlacementModeIndex,
                 ColumnNeighbourTieThreshold = _SharedDataViewModel.ColumnNeighbourTieThreshold,
@@ -1507,13 +1544,29 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     envelope.ColumnTieRodDiameter = Math.Max(envelope.ColumnTieRodDiameter, value.ColumnTieRodDiameter);
                     envelope.ColumnTieRodCountPerFace = Math.Max(envelope.ColumnTieRodCountPerFace, value.ColumnTieRodCountPerFace);
                     envelope.ColumnBraceCount = Math.Max(envelope.ColumnBraceCount, value.ColumnBraceCount);
-                    envelope.ColumnBraceAllowableCapacity = Math.Max(envelope.ColumnBraceAllowableCapacity, value.ColumnBraceAllowableCapacity);
+                    if (value.ColumnBraceAllowableCapacity > envelope.ColumnBraceAllowableCapacity + 0.1 ||
+                        Math.Abs(value.ColumnBraceAllowableCapacity - envelope.ColumnBraceAllowableCapacity) <= 0.1 &&
+                        TubeArea(value.ColumnBraceDiameter, value.ColumnBraceThickness) >
+                        TubeArea(envelope.ColumnBraceDiameter, envelope.ColumnBraceThickness))
+                    {
+                        envelope.ColumnBraceDiameter = value.ColumnBraceDiameter;
+                        envelope.ColumnBraceThickness = value.ColumnBraceThickness;
+                        envelope.ColumnBraceAllowableCapacity = value.ColumnBraceAllowableCapacity;
+                    }
                     envelope.ColumnCableAllowableCapacity = Math.Max(envelope.ColumnCableAllowableCapacity, value.ColumnCableAllowableCapacity);
                     envelope.ColumnTurnbuckleAllowableCapacity = Math.Max(envelope.ColumnTurnbuckleAllowableCapacity, value.ColumnTurnbuckleAllowableCapacity);
                     envelope.ColumnAnchorAllowableCapacity = Math.Max(envelope.ColumnAnchorAllowableCapacity, value.ColumnAnchorAllowableCapacity);
                 }
             }
             return envelope;
+        }
+
+        private static double TubeArea(double diameter, double thickness)
+        {
+            double d = Math.Max(0.0, diameter);
+            double t = Math.Max(0.0, Math.Min(d / 2.0, thickness));
+            double inner = Math.Max(0.0, d - 2.0 * t);
+            return Math.PI / 4.0 * (d * d - inner * inner);
         }
     }
 }

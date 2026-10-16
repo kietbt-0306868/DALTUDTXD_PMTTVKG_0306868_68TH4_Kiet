@@ -24,10 +24,21 @@
             
             <!-- Toolbar Settings -->
             <Grid Grid.Row="1" Background="#F8F9F9">
-                <StackPanel Orientation="Horizontal">
-                    <Button Content=" Lưu cấu hình"        Command="{Binding SaveSettingsCommand}"        Margin="5" Padding="12,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
-                    <Button Content=" Đặt lại mặc định"     Command="{Binding ResetSettingsCommand}"       Margin="5" Padding="12,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
-                </StackPanel>
+                <DockPanel LastChildFill="False">
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                        <Button Content=" Lưu cấu hình" Command="{Binding SaveSettingsCommand}" Margin="5" Padding="12,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
+                        <Button Content=" Đặt lại mặc định" Command="{Binding ResetSettingsCommand}" Margin="5" Padding="12,5" Background="White" BorderBrush="White" FontWeight="Bold"/>
+                        <Button Content=" Chọn loại giàn giáo" Command="{Binding SelectScaffoldSystemsCommand}"
+                                CommandParameter="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                Margin="5" Padding="12,5" Background="#0F766E" Foreground="White" BorderBrush="#0F766E" FontWeight="Bold"/>
+                    </StackPanel>
+                    <Border DockPanel.Dock="Right" Margin="8,8,12,8" Padding="10,5"
+                            Background="#ECFDF5" BorderBrush="#6EE7B7" BorderThickness="1" CornerRadius="4">
+                        <TextBlock VerticalAlignment="Center" Foreground="#065F46" FontWeight="SemiBold">
+                            <Run Text="Đang dùng: "/><Run Text="{Binding SelectedScaffoldSystemsSummary, Mode=OneWay}"/>
+                        </TextBlock>
+                    </Border>
+                </DockPanel>
             </Grid>
 
             <!-- Vùng Hiển Thị Chính -->
@@ -385,6 +396,8 @@
                                             <RowDefinition Height="35"/>
                                             <RowDefinition Height="35"/>
                                             <RowDefinition Height="35"/>
+                                            <RowDefinition Height="35"/>
+                                            <RowDefinition Height="35"/>
                                         </Grid.RowDefinitions>
 
                                         <TextBlock Grid.Row="0" Text="Chiều dày ván đáy:" VerticalAlignment="Center"/>
@@ -419,7 +432,7 @@
                                         <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding BeamPrimaryWalerSpacing}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
                                         <TextBlock Grid.Row="5" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
 
-                                        <TextBlock Grid.Row="6" Text="Nhịp ngang khung Ringlock:" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="6" Text="Nhịp ngang hệ giàn giáo:" VerticalAlignment="Center"/>
                                         <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding BeamScaffoldBayWidth}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
                                         <TextBlock Grid.Row="6" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
 
@@ -439,16 +452,32 @@
                                         <TextBox Grid.Row="9" Grid.Column="1" Text="{Binding BeamTieRodAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
                                         <TextBlock Grid.Row="9" Grid.Column="2" Text="kN" Margin="5,0" VerticalAlignment="Center"/>
 
-                                        <TextBlock Grid.Row="10" Text="Chống xiên: bước / góc:" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="10" Text="Ty chết biên D / bước:" VerticalAlignment="Center" ToolTip="Chỉ áp dụng cho dầm biên; hệ thống tự nhận diện theo mặt sàn tại đúng tầng"/>
                                         <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal" Margin="2">
+                                            <TextBox Text="{Binding BeamEdgeSurfaceTieRodDiameter}" Width="40" Padding="2,0" VerticalContentAlignment="Center"/>
+                                            <TextBlock Text="/" VerticalAlignment="Center" Margin="2,0"/>
+                                            <TextBox Text="{Binding BeamEdgeSurfaceTieRodSpacing}" Width="55" Padding="2,0" VerticalContentAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="10" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
+
+                                        <TextBlock Grid.Row="11" Text="L neo / [T] ty chết:" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Row="11" Grid.Column="1" Orientation="Horizontal" Margin="2">
+                                            <TextBox Text="{Binding BeamEdgeSurfaceTieRodAnchorLength}" Width="55" Padding="2,0" VerticalContentAlignment="Center"/>
+                                            <TextBlock Text="/" VerticalAlignment="Center" Margin="2,0"/>
+                                            <TextBox Text="{Binding BeamEdgeSurfaceTieRodAllowableCapacity}" Width="40" Padding="2,0" VerticalContentAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="11" Grid.Column="2" Text="mm/kN" Margin="5,0" VerticalAlignment="Center"/>
+
+                                        <TextBlock Grid.Row="12" Text="Chống xiên: bước / góc:" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Row="12" Grid.Column="1" Orientation="Horizontal" Margin="2">
                                             <TextBox Text="{Binding BeamSideBraceSpacing}" Width="45" Padding="2,0" VerticalContentAlignment="Center"/>
                                             <TextBlock Text="/" VerticalAlignment="Center" Margin="2,0"/>
                                             <TextBox Text="{Binding BeamSideBraceAngle}" Width="35" Padding="2,0" VerticalContentAlignment="Center"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Row="10" Grid.Column="2" Text="mm/°" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="12" Grid.Column="2" Text="mm/°" Margin="5,0" VerticalAlignment="Center"/>
 
-                                        <TextBlock Grid.Row="11" Text="Chống xiên D×t / n / [N]:" VerticalAlignment="Center"/>
-                                        <StackPanel Grid.Row="11" Grid.Column="1" Orientation="Horizontal" Margin="2">
+                                        <TextBlock Grid.Row="13" Text="Chống xiên D×t / n / [N]:" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Row="13" Grid.Column="1" Orientation="Horizontal" Margin="2">
                                             <TextBox Text="{Binding BeamSideBraceDiameter}" Width="25" Padding="1,0" VerticalContentAlignment="Center"/>
                                             <TextBlock Text="×" VerticalAlignment="Center" Margin="1,0"/>
                                             <TextBox Text="{Binding BeamSideBraceThickness}" Width="25" Padding="1,0" VerticalContentAlignment="Center"/>
@@ -457,28 +486,28 @@
                                             <TextBlock Text="/" VerticalAlignment="Center" Margin="1,0"/>
                                             <TextBox Text="{Binding BeamSideBraceAllowableCapacity}" Width="32" Padding="1,0" VerticalContentAlignment="Center"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Row="11" Grid.Column="2" Text="mm/kN" Margin="5,0" VerticalAlignment="Center" ToolTip="Sức chịu cho phép được đồng bộ theo danh mục tiết diện khi tự động thiết kế"/>
+                                        <TextBlock Grid.Row="13" Grid.Column="2" Text="mm/kN" Margin="5,0" VerticalAlignment="Center" ToolTip="Sức chịu cho phép được đồng bộ theo danh mục tiết diện khi tự động thiết kế"/>
 
-                                        <TextBlock Grid.Row="12" Text="Phương án thành dầm:" VerticalAlignment="Center"/>
-                                        <ComboBox Grid.Row="12" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding BeamPlacementModeIndex}" Margin="2">
+                                        <TextBlock Grid.Row="14" Text="Phương án thành dầm:" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Row="14" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding BeamPlacementModeIndex}" Margin="2">
                                             <ComboBoxItem Content="Tự động"/><ComboBoxItem Content="Dầm giữa"/><ComboBoxItem Content="Dầm biên"/>
                                         </ComboBox>
 
-                                        <TextBlock Grid.Row="13" Text="Cường độ khi tháo cốp pha:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="13" Grid.Column="1" Text="{Binding BeamStrippingStrengthPercent}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
-                                        <TextBlock Grid.Row="13" Grid.Column="2" Text="%" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="15" Text="Cường độ khi tháo cốp pha:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="15" Grid.Column="1" Text="{Binding BeamStrippingStrengthPercent}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="15" Grid.Column="2" Text="%" Margin="5,0" VerticalAlignment="Center"/>
 
-                                        <TextBlock Grid.Row="14" Text="Chồng vùng đầm dùi:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="14" Grid.Column="1" Text="{Binding BeamVibratorOverlap}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
-                                        <TextBlock Grid.Row="14" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="16" Text="Chồng vùng đầm dùi:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="16" Grid.Column="1" Text="{Binding BeamVibratorOverlap}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="16" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
 
-                                        <TextBlock Grid.Row="15" Text="Cây chống (D × t):" VerticalAlignment="Center"/>
-                                        <StackPanel Grid.Row="15" Grid.Column="1" Orientation="Horizontal" Margin="2">
+                                        <TextBlock Grid.Row="17" Text="Cây chống (D × t):" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Row="17" Grid.Column="1" Orientation="Horizontal" Margin="2">
                                             <TextBox Text="{Binding CayChongDiameter}" Width="40" Padding="2,0" VerticalContentAlignment="Center"/>
                                             <TextBlock Text="×" VerticalAlignment="Center" Margin="2,0"/>
                                             <TextBox Text="{Binding CayChongThickness}" Width="40" Padding="2,0" VerticalContentAlignment="Center"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Row="15" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="17" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
@@ -651,10 +680,10 @@
                                         </Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="35"/><RowDefinition Height="35"/><RowDefinition Height="35"/>
+                                            <RowDefinition Height="35"/><RowDefinition Height="35"/><RowDefinition Height="Auto"/>
                                             <RowDefinition Height="35"/><RowDefinition Height="Auto"/><RowDefinition Height="35"/>
-                                            <RowDefinition Height="Auto"/><RowDefinition Height="35"/><RowDefinition Height="35"/>
                                             <RowDefinition Height="35"/><RowDefinition Height="35"/><RowDefinition Height="35"/>
-                                            <RowDefinition Height="35"/><RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="35"/><RowDefinition Height="35"/><RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <TextBlock Grid.Row="0" Text="Số chống xiên:" VerticalAlignment="Center"/>
                                         <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ColumnBraceCount}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
@@ -662,18 +691,26 @@
                                         <TextBlock Grid.Row="1" Text="Góc chống với mặt bằng:" VerticalAlignment="Center"/>
                                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ColumnBraceAngle}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
                                         <TextBlock Grid.Row="1" Grid.Column="2" Text="°" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="2" Text="Sức chịu tải chống:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ColumnBraceAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
-                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="kN" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="3" Text="Bán kính tìm cột lân cận:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ColumnNeighbourTieThreshold}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="4" Grid.ColumnSpan="3" Text="Phân loại tự động theo 4 điểm chân chống trên trục cục bộ, riêng cho từng cặp (ColumnId, LevelId)." Foreground="#1D4ED8" TextWrapping="Wrap" Margin="0,5"/>
-                                        <TextBlock Grid.Row="5" Text="Cột/tầng cần kiểm tra:" VerticalAlignment="Center"/>
-                                        <ComboBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding SelectedColumnBraceAssessments}" SelectedValue="{Binding SelectedColumnBraceAssessmentKey}" SelectedValuePath="CacheKey" DisplayMemberPath="DisplayLabel" Margin="2" Padding="3,0"/>
-                                        <TextBlock Grid.Row="6" Grid.ColumnSpan="3" Text="{Binding SelectedColumnBraceAssessmentSummary}" Foreground="#334155" TextWrapping="Wrap" Margin="0,5"/>
-                                        <TextBlock Grid.Row="7" Text="Override cột/tầng đang chọn:" VerticalAlignment="Center"/>
-                                        <ComboBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding ColumnBraceOverrideIndex}" Margin="2" Padding="3,0">
+                                        <TextBlock Grid.Row="2" Text="Tiết diện chống đẩy-kéo:" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="2">
+                                            <TextBlock Text="D" VerticalAlignment="Center"/>
+                                            <TextBox Text="{Binding ColumnBraceDiameter}" Width="34" Padding="2,0" VerticalContentAlignment="Center"/>
+                                            <TextBlock Text=" × " VerticalAlignment="Center"/>
+                                            <TextBox Text="{Binding ColumnBraceThickness}" Width="34" Padding="2,0" VerticalContentAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="3" Text="Sức chịu tải chống:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ColumnBraceAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="2" Text="kN" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="4" Text="Bán kính tìm cột lân cận:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding ColumnNeighbourTieThreshold}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="5" Grid.ColumnSpan="3" Text="Phân loại tự động theo 4 điểm chân chống trên trục cục bộ, riêng cho từng cặp (ColumnId, LevelId)." Foreground="#1D4ED8" TextWrapping="Wrap" Margin="0,5"/>
+                                        <TextBlock Grid.Row="6" Text="Cột/tầng cần kiểm tra:" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding SelectedColumnBraceAssessments}" SelectedValue="{Binding SelectedColumnBraceAssessmentKey}" SelectedValuePath="CacheKey" DisplayMemberPath="DisplayLabel" Margin="2" Padding="3,0"/>
+                                        <TextBlock Grid.Row="7" Grid.ColumnSpan="3" Text="{Binding SelectedColumnBraceAssessmentSummary}" Foreground="#334155" TextWrapping="Wrap" Margin="0,5"/>
+                                        <TextBlock Grid.Row="8" Text="Override cột/tầng đang chọn:" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" SelectedIndex="{Binding ColumnBraceOverrideIndex}" Margin="2" Padding="3,0">
                                             <ComboBoxItem Content="Tự động theo hình học"/>
                                             <ComboBoxItem Content="Cột giữa"/>
                                             <ComboBoxItem Content="Cột biên"/>
@@ -682,22 +719,22 @@
                                             <ComboBoxItem Content="Cột móng/tầng trệt"/>
                                             <ComboBoxItem Content="Cảnh báo — nhập tay"/>
                                         </ComboBox>
-                                        <TextBlock Grid.Row="8" Text="Sức chịu kéo cáp:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="8" Grid.Column="1" Text="{Binding ColumnCableAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
-                                        <TextBlock Grid.Row="8" Grid.Column="2" Text="kN" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="9" Text="Sức chịu kéo tăng đơ:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="9" Grid.Column="1" Text="{Binding ColumnTurnbuckleAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="9" Text="Sức chịu kéo cáp:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="9" Grid.Column="1" Text="{Binding ColumnCableAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
                                         <TextBlock Grid.Row="9" Grid.Column="2" Text="kN" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="10" Text="Sức chịu nhổ neo chờ:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="10" Grid.Column="1" Text="{Binding ColumnAnchorAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="10" Text="Sức chịu kéo tăng đơ:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="10" Grid.Column="1" Text="{Binding ColumnTurnbuckleAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
                                         <TextBlock Grid.Row="10" Grid.Column="2" Text="kN" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="11" Text="Offset kiểm tra từ tim:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="11" Grid.Column="1" Text="{Binding ColumnAxisOffset}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
-                                        <TextBlock Grid.Row="11" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="12" Text="Sai lệch dọi mục tiêu:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="12" Grid.Column="1" Text="{Binding ColumnPlumbTargetTolerance}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="11" Text="Sức chịu nhổ neo chờ:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="11" Grid.Column="1" Text="{Binding ColumnAnchorAllowableCapacity}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="11" Grid.Column="2" Text="kN" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="12" Text="Offset kiểm tra từ tim:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="12" Grid.Column="1" Text="{Binding ColumnAxisOffset}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
                                         <TextBlock Grid.Row="12" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Row="13" Grid.ColumnSpan="3" Text="Hai hướng hở đối diện, từ ba hướng hở trở lên hoặc điểm rơi vào lỗ mở sẽ không được tự động sinh chống; kỹ sư phải xác nhận phương án riêng." Foreground="#B45309" FontStyle="Italic" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                        <TextBlock Grid.Row="13" Text="Sai lệch dọi mục tiêu:" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="13" Grid.Column="1" Text="{Binding ColumnPlumbTargetTolerance}" Padding="5,0" VerticalContentAlignment="Center" Margin="2"/>
+                                        <TextBlock Grid.Row="13" Grid.Column="2" Text="mm" Margin="5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Row="14" Grid.ColumnSpan="3" Text="Hai hướng hở đối diện, từ ba hướng hở trở lên hoặc điểm rơi vào lỗ mở sẽ không được tự động sinh chống; kỹ sư phải xác nhận phương án riêng." Foreground="#B45309" FontStyle="Italic" TextWrapping="Wrap" Margin="0,6,0,0"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>

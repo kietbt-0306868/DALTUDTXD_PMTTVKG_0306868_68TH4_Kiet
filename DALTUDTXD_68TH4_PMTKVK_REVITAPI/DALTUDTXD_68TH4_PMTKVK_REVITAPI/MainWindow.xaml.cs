@@ -90,6 +90,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                 }
 
                 System.Windows.Input.ICommand cmd = null;
+                object commandParameter = null;
                 switch (actionName)
                 {
                     case "SelectComponent": cmd = SharedSharedDataViewModel.SelectComponentCommand; break;
@@ -125,17 +126,24 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                     case "ResetSettings":
                         if (ThongSoTab.DataContext is ThongSoViewModel reset) cmd = reset.ResetSettingsCommand;
                         break;
+                    case "SelectScaffoldSystems":
+                        if (ThongSoTab.DataContext is ThongSoViewModel scaffold)
+                        {
+                            cmd = scaffold.SelectScaffoldSystemsCommand;
+                            commandParameter = this;
+                        }
+                        break;
                 }
 
                 if (cmd == null)
                     throw new InvalidOperationException($"Không tìm thấy lệnh giao diện '{actionName}'.");
-                if (!cmd.CanExecute(null))
+                if (!cmd.CanExecute(commandParameter))
                 {
                     MessageBox.Show("Lệnh chưa thể chạy ở trạng thái hiện tại. Hãy kiểm tra cấu kiện đã chọn và dữ liệu đầu vào.",
                         "Lệnh chưa sẵn sàng", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
-                cmd.Execute(null);
+                cmd.Execute(commandParameter);
             }
             catch (Exception exception)
             {

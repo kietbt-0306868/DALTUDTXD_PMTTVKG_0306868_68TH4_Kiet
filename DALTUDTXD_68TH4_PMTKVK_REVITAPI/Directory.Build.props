@@ -1,7 +1,7 @@
 <Project>
   <!-- Set before Microsoft.Common.props is imported to avoid MSB3539 -->
   <PropertyGroup>
-	<BaseIntermediateOutputPath>C:\R\obj\</BaseIntermediateOutputPath>
-	<BaseOutputPath>C:\R\bin\</BaseOutputPath>
+	<BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build\obj\</BaseIntermediateOutputPath>
+	<BaseOutputPath>$(MSBuildThisFileDirectory)build\bin\</BaseOutputPath>
   </PropertyGroup>
 </Project>

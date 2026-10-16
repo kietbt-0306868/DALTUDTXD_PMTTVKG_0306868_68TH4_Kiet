@@ -114,7 +114,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     ? string.Empty
                     : " PRIOR-LEVEL ACTION: " + assessment.PreviousLevelAction;
                 string directionChecks = string.Join(" | ", assessment.Directions.Select(direction =>
-                    $"H{direction.DirectionIndex + 1} ({direction.ProposedFootPoint.X:F0},{direction.ProposedFootPoint.Y:F0})={direction.SupportKind}"));
+                    $"H{direction.DirectionIndex + 1} ({direction.ProposedFootPoint.X:F0},{direction.ProposedFootPoint.Y:F0})" +
+                    $" @{direction.ResolvedRunMm:F0} mm={direction.SupportKind}"));
                 return $"{assessment.LevelName}: {assessment.EffectiveType} ({source}) — {assessment.RecommendedAction}{priorLevel} KIỂM TRA CHÂN: {directionChecks}";
             }
         }
@@ -197,12 +198,14 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private List<KetQuaHienThi> _checkResults;
         public Action<string> NavigateAction { get; private set; }
         private Action _closeWindowAction;
+        private ElementId _pendingEditablePreviewViewId = ElementId.InvalidElementId;
 
         /// <summary>
         /// False is the default, responsive preview (native structure + formwork).
         /// True is requested only by the explicit "Dựng Family chi tiết" action.
         /// </summary>
         public bool UseDetailed3DPreview { get; private set; }
+        public bool PreservePreviewArtifactsForEditing { get; private set; }
         private readonly IDialogService _dialogService;
         private readonly FormworkTakeoffWorkflowService _takeoffWorkflowService =
             new FormworkTakeoffWorkflowService();
@@ -248,17 +251,26 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public int ScheduledDesignRevision => _scheduledDesignRevision;
         public DateTime? ValidatedDesignTimestamp => _validatedDesignTimestamp;
         public IReadOnlyList<string> ValidatedDesignAdjustments => _validatedDesignAdjustments;
-        public CalculationParameters ValidatedDesignParameters =>
-            _validatedDesignParameters == null ? null : CloneCalculationParameters(_validatedDesignParameters);
+        public CalculationParameters ValidatedDesignParameters
+        {
+            get
+            {
+                if (_validatedDesignParameters == null) return null;
+                CalculationParameters parameters = CloneCalculationParameters(_validatedDesignParameters);
+                parameters.SelectedScaffoldSystems = SelectedScaffoldSystems;
+                return parameters;
+            }
+        }
         public IReadOnlyDictionary<string, ComponentFormworkDesign> ComponentFormworkDesigns =>
             _componentFormworkDesigns.ToDictionary(pair => pair.Key, pair => pair.Value.Clone(), StringComparer.OrdinalIgnoreCase);
 
         public ComponentFormworkDesign GetComponentFormworkDesign(string elementUniqueId)
         {
             if (string.IsNullOrWhiteSpace(elementUniqueId)) return null;
-            return _componentFormworkDesigns.TryGetValue(elementUniqueId, out ComponentFormworkDesign design)
-                ? design.Clone()
-                : null;
+            if (!_componentFormworkDesigns.TryGetValue(elementUniqueId, out ComponentFormworkDesign design)) return null;
+            ComponentFormworkDesign clone = design.Clone();
+            if (clone.Parameters != null) clone.Parameters.SelectedScaffoldSystems = SelectedScaffoldSystems;
+            return clone;
         }
 
         public CalculationParameters GetEffectiveComponentParameters(FloorElementModel component,
@@ -268,9 +280,95 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                                                fallback?.Clone() ??
                                                _validatedDesignParameters?.Clone() ??
                                                new CalculationParameters();
+            parameters.SelectedScaffoldSystems = SelectedScaffoldSystems;
             ApplyStructuralGeometry(parameters, component);
             ApplyIntersectionContext(parameters, component?.IntersectionInfo ?? GetComponentIntersectionInfo(component?.UniqueId));
+            ApplyShoringLevelContext(parameters, component);
             return parameters;
+        }
+
+        /// <summary>
+        /// Elevated slab/beam shoring is allowed only above the user-designated ground
+        /// floor. Foundation formwork never receives slab/beam props or scaffold bays.
+        /// The decision is intentionally made per Revit element because a project-wide
+        /// boolean cannot distinguish foundation, ground-floor and upper-floor members.
+        /// </summary>
+        public bool ShouldPlaceElevatedShoring(FloorElementModel component)
+        {
+            if (component == null) return false;
+            if (component.ComponentType == StructuralComponentType.Foundation) return false;
+            if (component.ComponentType != StructuralComponentType.Slab &&
+                component.ComponentType != StructuralComponentType.Beam) return true;
+            if (DesignatedGroundLevel == null) return true;
+
+            Element element = null;
+            if (RevitDoc != null && !string.IsNullOrWhiteSpace(component.UniqueId))
+            {
+                try { element = RevitDoc.GetElement(component.UniqueId); }
+                catch (Autodesk.Revit.Exceptions.ApplicationException) { }
+            }
+            return ShouldPlaceElevatedShoring(element, component.ComponentType, component.Level);
+        }
+
+        public bool ShouldPlaceElevatedShoring(Element element, StructuralComponentType componentType,
+            string fallbackLevelName = null)
+        {
+            if (componentType == StructuralComponentType.Foundation) return false;
+            if (componentType != StructuralComponentType.Slab && componentType != StructuralComponentType.Beam)
+                return true;
+            if (DesignatedGroundLevel == null) return true;
+
+            double levelElevationMm;
+            if (TryGetElementLevelElevationMm(element, out levelElevationMm) ||
+                TryGetNamedLevelElevationMm(fallbackLevelName, out levelElevationMm))
+                return levelElevationMm > DesignatedGroundLevel.Elevation + 10.0;
+
+            // Last-resort geometric fallback for imported or malformed members without
+            // a valid LevelId. A ground-floor slab/beam normally terminates at the level
+            // elevation, whereas an upper member lies clearly above the selected cutoff.
+            BoundingBoxXYZ box = element?.get_BoundingBox(null);
+            if (box != null)
+                return box.Max.Z * 304.8 > DesignatedGroundLevel.Elevation + 10.0;
+
+            // Unknown level data must not create potentially unsupported shoring below
+            // the cutoff. The formwork itself is still generated and a level can be fixed
+            // in Revit before refreshing the preview.
+            return false;
+        }
+
+        private void ApplyShoringLevelContext(CalculationParameters parameters, FloorElementModel component)
+        {
+            if (parameters == null || component == null) return;
+            if (component.ComponentType == StructuralComponentType.Foundation)
+                parameters.IsGroundLevel = true;
+            else if (component.ComponentType == StructuralComponentType.Slab ||
+                     component.ComponentType == StructuralComponentType.Beam)
+                parameters.IsGroundLevel = !ShouldPlaceElevatedShoring(component);
+        }
+
+        private bool TryGetElementLevelElevationMm(Element element, out double elevationMm)
+        {
+            elevationMm = 0;
+            if (element == null || RevitDoc == null) return false;
+            ElementId levelId = element.LevelId;
+            if (levelId != null && levelId != ElementId.InvalidElementId &&
+                RevitDoc.GetElement(levelId) is Level level)
+            {
+                elevationMm = level.Elevation * 304.8;
+                return true;
+            }
+            return false;
+        }
+
+        private bool TryGetNamedLevelElevationMm(string levelName, out double elevationMm)
+        {
+            elevationMm = 0;
+            if (string.IsNullOrWhiteSpace(levelName)) return false;
+            LevelModel level = AvailableLevels?.FirstOrDefault(item =>
+                string.Equals(item.Name, levelName, StringComparison.OrdinalIgnoreCase));
+            if (level == null) return false;
+            elevationMm = level.Elevation;
+            return true;
         }
 
         public IReadOnlyDictionary<string, ComponentIntersectionInfo> ComponentIntersectionCache =>
@@ -566,6 +664,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             BeamTieRodDiameter = p.BeamTieRodDiameter;
             BeamTieRodSpacing = p.BeamTieRodSpacing;
             BeamTieRodAllowableCapacity = p.BeamTieRodAllowableCapacity;
+            BeamEdgeSurfaceTieRodDiameter = p.BeamEdgeSurfaceTieRodDiameter;
+            BeamEdgeSurfaceTieRodSpacing = p.BeamEdgeSurfaceTieRodSpacing;
+            BeamEdgeSurfaceTieRodAnchorLength = p.BeamEdgeSurfaceTieRodAnchorLength;
+            BeamEdgeSurfaceTieRodAllowableCapacity = p.BeamEdgeSurfaceTieRodAllowableCapacity;
             BeamSideBraceSpacing = p.BeamSideBraceSpacing;
             BeamSideBraceAngle = p.BeamSideBraceAngle;
             BeamSideBraceDiameter = p.BeamSideBraceDiameter;
@@ -597,7 +699,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             ColumnTieRodAllowableCapacity = p.ColumnTieRodAllowableCapacity;
             ColumnBraceCount = p.ColumnBraceCount;
             ColumnBraceAngle = p.ColumnBraceAngle;
+            ColumnBraceCount = p.ColumnBraceCount;
+            ColumnBraceAngle = p.ColumnBraceAngle;
+            ColumnBraceDiameter = p.ColumnBraceDiameter;
+            ColumnBraceThickness = p.ColumnBraceThickness;
             ColumnBraceAllowableCapacity = p.ColumnBraceAllowableCapacity;
+            ColumnBracePlacementModeIndex = p.ColumnBracePlacementModeIndex;
             ColumnBracePlacementModeIndex = p.ColumnBracePlacementModeIndex;
             ColumnNeighbourTieThreshold = p.ColumnNeighbourTieThreshold;
             ColumnIsBoundaryOrCorner = p.ColumnIsBoundaryOrCorner;
@@ -772,6 +879,86 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private double _supportJackExtensionLimit = 600.0;
         public double SupportJackExtensionLimit { get => _supportJackExtensionLimit; set { _supportJackExtensionLimit = value; OnPropertyChanged(); } }
 
+        private ScaffoldSystemType _selectedScaffoldSystems = ScaffoldSystemType.Ringlock;
+        public ScaffoldSystemType SelectedScaffoldSystems
+        {
+            get => _selectedScaffoldSystems.Normalize();
+            set
+            {
+                ScaffoldSystemType normalized = value.Normalize();
+                if (_selectedScaffoldSystems == normalized) return;
+                _selectedScaffoldSystems = normalized;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(UseFrameScaffold));
+                OnPropertyChanged(nameof(UseWedgeScaffold));
+                OnPropertyChanged(nameof(UseRinglockScaffold));
+                OnPropertyChanged(nameof(SelectedScaffoldSystemsSummary));
+                OnPropertyChanged(nameof(ValidatedDesignParameters));
+
+                // Changing the catalogue is an operational design revision even when
+                // the numeric section checks remain unchanged. Propagate it through the
+                // committed per-element designs, invalidate the schedule revision and
+                // persist the new revision so preview/takeoff cannot reuse stale names.
+                if (_validatedDesignParameters != null && !_isApplyingValidatedDesign)
+                {
+                    _validatedDesignParameters.SelectedScaffoldSystems = normalized;
+                    foreach (ComponentFormworkDesign design in _componentFormworkDesigns.Values)
+                    {
+                        if (design?.Parameters != null)
+                            design.Parameters.SelectedScaffoldSystems = normalized;
+                    }
+                    _validatedDesignTimestamp = DateTime.Now;
+                    _validatedDesignRevision++;
+                    _scheduledDesignRevision = 0;
+                    PersistValidatedDesignForCurrentDocument();
+                    OnPropertyChanged(nameof(ComponentFormworkDesigns));
+                    OnPropertyChanged(nameof(ValidatedDesignTimestamp));
+                    OnPropertyChanged(nameof(ValidatedDesignRevision));
+                    OnPropertyChanged(nameof(ScheduledDesignRevision));
+                    NotifyWorkflowStateChanged();
+                    if (!IsCalculated) IsCalculated = true;
+                }
+                else if (_validatedDesignParameters == null)
+                {
+                    IsCalculated = false;
+                }
+            }
+        }
+
+        public bool UseFrameScaffold
+        {
+            get => (SelectedScaffoldSystems & ScaffoldSystemType.Frame) != 0;
+            set => SetScaffoldSystemEnabled(ScaffoldSystemType.Frame, value, nameof(UseFrameScaffold));
+        }
+
+        public bool UseWedgeScaffold
+        {
+            get => (SelectedScaffoldSystems & ScaffoldSystemType.Wedge) != 0;
+            set => SetScaffoldSystemEnabled(ScaffoldSystemType.Wedge, value, nameof(UseWedgeScaffold));
+        }
+
+        public bool UseRinglockScaffold
+        {
+            get => (SelectedScaffoldSystems & ScaffoldSystemType.Ringlock) != 0;
+            set => SetScaffoldSystemEnabled(ScaffoldSystemType.Ringlock, value, nameof(UseRinglockScaffold));
+        }
+
+        public string SelectedScaffoldSystemsSummary => SelectedScaffoldSystems.ToDisplayText();
+
+        private void SetScaffoldSystemEnabled(ScaffoldSystemType system, bool enabled, string propertyName)
+        {
+            ScaffoldSystemType updated = enabled
+                ? SelectedScaffoldSystems | system
+                : SelectedScaffoldSystems & ~system;
+            if (updated == ScaffoldSystemType.None)
+            {
+                // UI checkboxes cannot leave the design without a scaffold catalogue.
+                OnPropertyChanged(propertyName);
+                return;
+            }
+            SelectedScaffoldSystems = updated;
+        }
+
         // Beam Properties
         private double _beamWidth = 200.0;
         public double BeamWidth { get => _beamWidth; set { _beamWidth = value; OnPropertyChanged(); } }
@@ -827,15 +1014,23 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 OnPropertyChanged(nameof(BeamPropSpacing));
             }
         }
-        private double _beamScaffoldBayWidth = 1200.0;
+        private double _beamScaffoldBayWidth = 600.0;
         public double BeamScaffoldBayWidth { get => _beamScaffoldBayWidth; set { _beamScaffoldBayWidth = value; OnPropertyChanged(); } }
         private double _beamTieRodDiameter = 16.0;
         public double BeamTieRodDiameter { get => _beamTieRodDiameter; set { _beamTieRodDiameter = value; OnPropertyChanged(); } }
-        private double _beamTieRodSpacing = 1200.0;
+        private double _beamTieRodSpacing = 1000.0;
         public double BeamTieRodSpacing { get => _beamTieRodSpacing; set { _beamTieRodSpacing = value; OnPropertyChanged(); } }
         private double _beamTieRodAllowableCapacity = 20.0;
         public double BeamTieRodAllowableCapacity { get => _beamTieRodAllowableCapacity; set { _beamTieRodAllowableCapacity = value; OnPropertyChanged(); } }
-        private double _beamSideBraceSpacing = 1200.0;
+        private double _beamEdgeSurfaceTieRodDiameter = 12.0;
+        public double BeamEdgeSurfaceTieRodDiameter { get => _beamEdgeSurfaceTieRodDiameter; set { _beamEdgeSurfaceTieRodDiameter = value; OnPropertyChanged(); } }
+        private double _beamEdgeSurfaceTieRodSpacing = 1000.0;
+        public double BeamEdgeSurfaceTieRodSpacing { get => _beamEdgeSurfaceTieRodSpacing; set { _beamEdgeSurfaceTieRodSpacing = value; OnPropertyChanged(); } }
+        private double _beamEdgeSurfaceTieRodAnchorLength = 1200.0;
+        public double BeamEdgeSurfaceTieRodAnchorLength { get => _beamEdgeSurfaceTieRodAnchorLength; set { _beamEdgeSurfaceTieRodAnchorLength = value; OnPropertyChanged(); } }
+        private double _beamEdgeSurfaceTieRodAllowableCapacity = 12.0;
+        public double BeamEdgeSurfaceTieRodAllowableCapacity { get => _beamEdgeSurfaceTieRodAllowableCapacity; set { _beamEdgeSurfaceTieRodAllowableCapacity = value; OnPropertyChanged(); } }
+        private double _beamSideBraceSpacing = 1000.0;
         public double BeamSideBraceSpacing { get => _beamSideBraceSpacing; set { _beamSideBraceSpacing = value; OnPropertyChanged(); } }
         private double _beamSideBraceAngle = 55.0;
         public double BeamSideBraceAngle { get => _beamSideBraceAngle; set { _beamSideBraceAngle = value; OnPropertyChanged(); } }
@@ -936,6 +1131,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 OnPropertyChanged();
             }
         }
+
+        private double _columnBraceDiameter = 48.0;
+        public double ColumnBraceDiameter { get => _columnBraceDiameter; set { _columnBraceDiameter = value; OnPropertyChanged(); } }
+
+        private double _columnBraceThickness = 2.0;
+        public double ColumnBraceThickness { get => _columnBraceThickness; set { _columnBraceThickness = value; OnPropertyChanged(); } }
 
         private double _columnBraceAllowableCapacity = 15.0;
         public double ColumnBraceAllowableCapacity { get => _columnBraceAllowableCapacity; set { _columnBraceAllowableCapacity = value; OnPropertyChanged(); } }
@@ -1059,18 +1260,34 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public bool IsGroundLevel { get => _isGroundLevel; set { _isGroundLevel = value; OnPropertyChanged(); } }
 
         private LevelModel _designatedGroundLevel;
-        public LevelModel DesignatedGroundLevel { get => _designatedGroundLevel; set { _designatedGroundLevel = value; OnPropertyChanged(); UpdateGroundLevelState(); } }
+        public LevelModel DesignatedGroundLevel
+        {
+            get => _designatedGroundLevel;
+            set
+            {
+                _designatedGroundLevel = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(GroundFloorShoringRuleText));
+                UpdateGroundLevelState();
+            }
+        }
+
+        public string GroundFloorShoringRuleText => DesignatedGroundLevel == null
+            ? "Chưa chọn tầng trệt: hệ chống đứng dùng quy tắc mặc định."
+            : $"Tầng trệt: {DesignatedGroundLevel.Name} ({DesignatedGroundLevel.Elevation:F0} mm) · chỉ bố trí cây chống/giàn giáo cho sàn và dầm ở các tầng phía trên.";
 
         private List<LevelModel> _availableLevels = new List<LevelModel>();
         public List<LevelModel> AvailableLevels { get => _availableLevels; set { _availableLevels = value; OnPropertyChanged(); } }
 
         private void UpdateGroundLevelState()
         {
-            if (FloorElements != null && FloorElements.Count > 0 && DesignatedGroundLevel != null)
-            {
-                IsGroundLevel = FloorElements.All(f => f.Elevation <= DesignatedGroundLevel.Elevation + 0.01);
-                IsCalculated = true; // Trigger recalculation
-            }
+            List<FloorElementModel> shoringComponents = (FloorElements ?? new List<FloorElementModel>())
+                .Where(component => component.ComponentType == StructuralComponentType.Slab ||
+                                    component.ComponentType == StructuralComponentType.Beam)
+                .ToList();
+            IsGroundLevel = DesignatedGroundLevel != null && shoringComponents.Count > 0 &&
+                            shoringComponents.All(component => !ShouldPlaceElevatedShoring(component));
+            IsCalculated = true; // Trigger recalculation and invalidate preview/schedule state.
         }
 
         /// <summary>
@@ -1087,6 +1304,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 _floorElements = value ?? new List<FloorElementModel>();
                 RefreshComponentIntersections();
+                UpdateGroundLevelState();
                 OnPropertyChanged();
                 NotifyWorkflowStateChanged();
             }
@@ -1135,6 +1353,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             _closeWindowAction = anSoCuaSo;
 
             LoadDefaults();
+            if (ScaffoldSystemPreferenceStore.TryLoad(out ScaffoldSystemType savedScaffoldSystems))
+                SelectedScaffoldSystems = savedScaffoldSystems;
 
             UpdateResultsCommand = new RelayCommand(o => ExecuteRunAnalysis());
             RunAnalysisCommand = new RelayCommand(o => ExecuteRunAnalysis());
@@ -1160,6 +1380,23 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         public void SetCloseWindowAction(Action closeWindowAction)
         {
             _closeWindowAction = closeWindowAction;
+        }
+
+        public void RequestEditablePreviewInRevit(ElementId viewId)
+        {
+            if (viewId == null || viewId == ElementId.InvalidElementId) return;
+            _pendingEditablePreviewViewId = viewId;
+            PreservePreviewArtifactsForEditing = true;
+            _closeWindowAction?.Invoke();
+        }
+
+        public bool TryTakeEditablePreviewRequest(out ElementId viewId)
+        {
+            viewId = _pendingEditablePreviewViewId;
+            _pendingEditablePreviewViewId = ElementId.InvalidElementId;
+            bool requested = viewId != null && viewId != ElementId.InvalidElementId;
+            PreservePreviewArtifactsForEditing = false;
+            return requested;
         }
 
         public void LoadDefaults()
@@ -1203,6 +1440,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             SupportHeadBearingAllowable = p.SupportHeadBearingAllowable;
             SupportJackExtension = p.SupportJackExtension;
             SupportJackExtensionLimit = p.SupportJackExtensionLimit;
+            SelectedScaffoldSystems = ScaffoldSystemType.Ringlock;
 
             BeamBottomYokeSpacing = p.BeamBottomYokeSpacing;
             BeamPropSpacing = p.BeamPropSpacing;
@@ -1215,6 +1453,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             BeamTieRodDiameter = p.BeamTieRodDiameter;
             BeamTieRodSpacing = p.BeamTieRodSpacing;
             BeamTieRodAllowableCapacity = p.BeamTieRodAllowableCapacity;
+            BeamEdgeSurfaceTieRodDiameter = p.BeamEdgeSurfaceTieRodDiameter;
+            BeamEdgeSurfaceTieRodSpacing = p.BeamEdgeSurfaceTieRodSpacing;
+            BeamEdgeSurfaceTieRodAnchorLength = p.BeamEdgeSurfaceTieRodAnchorLength;
+            BeamEdgeSurfaceTieRodAllowableCapacity = p.BeamEdgeSurfaceTieRodAllowableCapacity;
             BeamSideBraceSpacing = p.BeamSideBraceSpacing;
             BeamSideBraceAngle = p.BeamSideBraceAngle;
             BeamSideBraceDiameter = p.BeamSideBraceDiameter;
@@ -1224,6 +1466,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             BeamPlacementModeIndex = p.BeamPlacementModeIndex;
             BeamStrippingStrengthPercent = p.BeamStrippingStrengthPercent;
             BeamVibratorOverlap = p.BeamVibratorOverlap;
+
+            ColumnBraceDiameter = p.ColumnBraceDiameter;
+            ColumnBraceThickness = p.ColumnBraceThickness;
+            ColumnBraceAllowableCapacity = p.ColumnBraceAllowableCapacity;
 
             Joist1Spacing = 400.0;
             Joist2Spacing = 1000.0;
@@ -1387,6 +1633,49 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 disposable.Dispose();
         }
 
+        /// <summary>
+        /// Revit rejects every Transaction on a document while a PreviewControl of that
+        /// document is alive ("changes to the document are temporarily disabled").
+        /// Release the 2D preview for the edit and show it again on the same tab afterwards.
+        /// </summary>
+        private T WithPreviewReleased<T>(Func<T> action)
+        {
+            bool hadPreview = SharedPreviewControl != null;
+            DisposePreviewControl();
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                if (hadPreview) RestorePreviewForCurrentTab();
+            }
+        }
+
+        private void RestorePreviewForCurrentTab()
+        {
+            if (RevitDoc == null) return;
+            if (SharedPreviewControl == null) InitializePreviewControl(RevitDoc);
+            AssignPreviewToCurrentTab();
+        }
+
+        private void AssignPreviewToCurrentTab()
+        {
+            switch (CurrentWorkflowTab)
+            {
+                case "TinhToanView":
+                case "Report":
+                    TinhToanPreviewControl = SharedPreviewControl;
+                    break;
+                case "KetQuaView":
+                    KetQuaPreviewControl = SharedPreviewControl;
+                    break;
+                default:
+                    DuLieuPreviewControl = SharedPreviewControl;
+                    break;
+            }
+        }
+
         public string RevitVersionStatus
         {
             get => _revitVersionStatus;
@@ -1466,8 +1755,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 EnsureTakeoffSelection();
                 RefreshComponentIntersections();
-                FormworkWorkflowResult result = _takeoffWorkflowService.PublishAreas(RevitDoc, FloorElements,
-                    GetComponentFormworkDesign, ValidatedDesignRevision);
+                FormworkWorkflowResult result = WithPreviewReleased(() => _takeoffWorkflowService.PublishAreas(RevitDoc, FloorElements,
+                    GetComponentFormworkDesign, ValidatedDesignRevision));
                 RefreshWorkflowModels();
                 TakeoffWorkflowStatus = result.Summary;
                 RevitVersionStatus = result.Summary;
@@ -1491,16 +1780,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 }
                 EnsureTakeoffSelection();
                 var summaries = new List<string>();
-                summaries.Add(_takeoffWorkflowService.JoinByConstructionSequence(RevitDoc, FloorElements).Summary);
-                summaries.Add(_takeoffWorkflowService.NameComponents(RevitDoc, FloorElements).Summary);
-                summaries.Add(_takeoffWorkflowService.EnsureSharedParameters(RevitDoc).Summary);
+                summaries.Add(WithPreviewReleased(() => _takeoffWorkflowService.JoinByConstructionSequence(RevitDoc, FloorElements)).Summary);
+                summaries.Add(WithPreviewReleased(() => _takeoffWorkflowService.NameComponents(RevitDoc, FloorElements)).Summary);
+                summaries.Add(WithPreviewReleased(() => _takeoffWorkflowService.EnsureSharedParameters(RevitDoc)).Summary);
                 RefreshComponentIntersections();
                 ExecuteUpdateResults(false);
                 IsCalculated = true;
                 summaries.Add("Đã khởi tạo phép tính từ tải trọng, hình học và diện tích ròng.");
-                summaries.Add(_takeoffWorkflowService.CreateSchedules(RevitDoc).Summary);
-                summaries.Add(_takeoffWorkflowService.PublishAreas(RevitDoc, FloorElements,
-                    GetComponentFormworkDesign, ValidatedDesignRevision).Summary);
+                summaries.Add(WithPreviewReleased(() => _takeoffWorkflowService.CreateSchedules(RevitDoc)).Summary);
+                summaries.Add(WithPreviewReleased(() => _takeoffWorkflowService.PublishAreas(RevitDoc, FloorElements,
+                    GetComponentFormworkDesign, ValidatedDesignRevision)).Summary);
                 RefreshWorkflowModels();
                 TakeoffWorkflowStatus = "Đã hoàn thành 6 bước bóc tách khối lượng ván khuôn.";
                 RevitVersionStatus = TakeoffWorkflowStatus;
@@ -1602,7 +1891,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             try
             {
                 EnsureTakeoffSelection();
-                FormworkWorkflowResult result = action();
+                FormworkWorkflowResult result = WithPreviewReleased(action);
                 if (refreshModels) RefreshWorkflowModels();
                 TakeoffWorkflowStatus = result.Summary;
                 RevitVersionStatus = result.Summary;
@@ -1683,6 +1972,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 SupportHeadBearingAllowable = SupportHeadBearingAllowable,
                 SupportJackExtension = SupportJackExtension,
                 SupportJackExtensionLimit = SupportJackExtensionLimit,
+                SelectedScaffoldSystems = this.SelectedScaffoldSystems,
                 SoNhipVanMat = SoNhipVanMat,
                 SoNhipXaGoPhu = SoNhipXaGoPhu,
                 SoNhipXaGoChinh = SoNhipXaGoChinh,
@@ -1710,6 +2000,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 BeamTieRodDiameter = BeamTieRodDiameter,
                 BeamTieRodSpacing = BeamTieRodSpacing,
                 BeamTieRodAllowableCapacity = BeamTieRodAllowableCapacity,
+                BeamEdgeSurfaceTieRodDiameter = BeamEdgeSurfaceTieRodDiameter,
+                BeamEdgeSurfaceTieRodSpacing = BeamEdgeSurfaceTieRodSpacing,
+                BeamEdgeSurfaceTieRodAnchorLength = BeamEdgeSurfaceTieRodAnchorLength,
+                BeamEdgeSurfaceTieRodAllowableCapacity = BeamEdgeSurfaceTieRodAllowableCapacity,
                 BeamSideBraceSpacing = BeamSideBraceSpacing,
                 BeamSideBraceAngle = BeamSideBraceAngle,
                 BeamSideBraceDiameter = BeamSideBraceDiameter,
@@ -1746,6 +2040,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 ColumnTieRodAllowableCapacity = ColumnTieRodAllowableCapacity,
                 ColumnBraceCount = ColumnBraceCount,
                 ColumnBraceAngle = ColumnBraceAngle,
+                ColumnBraceDiameter = ColumnBraceDiameter,
+                ColumnBraceThickness = ColumnBraceThickness,
                 ColumnBraceAllowableCapacity = ColumnBraceAllowableCapacity,
                 ColumnBracePlacementModeIndex = ColumnBracePlacementModeIndex,
                 ColumnNeighbourTieThreshold = ColumnNeighbourTieThreshold,
@@ -1883,16 +2179,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 DesignatedGroundLevel = window.SelectedLevel;
                 RevitVersionStatus = $"Đã thiết lập tầng trệt: {DesignatedGroundLevel.Name}";
-                
-                if (FloorElements != null && FloorElements.Count > 0)
-                {
-                    IsGroundLevel = FloorElements.All(f => f.Elevation <= DesignatedGroundLevel.Elevation + 0.01);
-                }
-                else
-                {
-                    IsGroundLevel = false;
-                }
-                
+
+                UpdateGroundLevelState();
                 ExecuteUpdateResults(false);
                 // Changing the designated ground level invalidates calculation/layout
                 // data only. Native Revit geometry is generated exclusively through
@@ -2261,19 +2549,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 var selectedIds = floorModels.Select(f => new ElementId(long.Parse(f.ElementId))).ToList();
                 UpdatePreviewGraphics(selectedIds);
 
-                // Check if the floor is on Level 1 / Ground Level or is a Foundation
-                if (isFoundation)
-                {
-                    IsGroundLevel = true;
-                }
-                else if (DesignatedGroundLevel != null)
-                {
-                    IsGroundLevel = floorModels.All(f => f.Elevation <= DesignatedGroundLevel.Elevation + 0.01);
-                }
-                else
-                {
-                    IsGroundLevel = false;
-                }
+                // Apply the selected ground-floor cutoff per element. Width/plan-size
+                // fields are deliberately not reused as elevations.
+                UpdateGroundLevelState();
 
                 // Lưu trạng thái trước khi phát sự kiện
                 // Phát toàn bộ phạm vi cấu kiện, không chỉ riêng các sàn vừa xử lý.
@@ -2292,6 +2570,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 View activeView = RevitUIDoc.ActiveView;
                 if (activeView == null) return;
+
+                // The live PreviewControl blocks the highlight transaction; it is rebuilt below.
+                DisposePreviewControl();
 
                 using (Transaction t = new Transaction(RevitDoc, "Highlight Slabs"))
                 {
@@ -2353,20 +2634,14 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     t.Commit();
                 }
                 
-                // Cập nhật lại PreviewControl nếu cần
-                if (SharedPreviewControl is IDisposable disposable)
-                {
-                    disposable.Dispose();
-                }
+                // Cập nhật lại PreviewControl và gán lại cho tab hiện tại đang active
                 SharedPreviewControl = new Autodesk.Revit.UI.PreviewControl(RevitDoc, activeView.Id);
-                
-                // Gán lại cho tab hiện tại đang active
-                if (DuLieuPreviewControl != null) DuLieuPreviewControl = SharedPreviewControl;
-                else if (TinhToanPreviewControl != null) TinhToanPreviewControl = SharedPreviewControl;
-                else if (KetQuaPreviewControl != null) KetQuaPreviewControl = SharedPreviewControl;
-                else DuLieuPreviewControl = SharedPreviewControl; // Default
+                AssignPreviewToCurrentTab();
             }
-            catch { /* Ignore */ }
+            catch
+            {
+                try { RestorePreviewForCurrentTab(); } catch { /* Ignore */ }
+            }
         }
 
         public void RenderPreviewGraphics(List<string> validUniqueIds, Action<System.Windows.FrameworkElement> setPreviewControlAction)
@@ -2395,6 +2670,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
                     if (viewPlan != null)
                     {
+                        // The live PreviewControl blocks the highlight transaction; it is rebuilt below.
+                        DisposePreviewControl();
+
                         using (Transaction t = new Transaction(RevitDoc, "Highlight Floors"))
                         {
                             t.Start();
@@ -2466,11 +2744,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                             t.Commit();
                         }
                             
-                        if (SharedPreviewControl is IDisposable disposable)
-                        {
-                            disposable.Dispose();
-                        }
-                            
                         SharedPreviewControl = new PreviewControl(RevitDoc, viewPlan.Id);
                         setPreviewControlAction?.Invoke(SharedPreviewControl);
                     }
@@ -2482,6 +2755,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
             catch (Exception ex)
             {
+                try { RestorePreviewForCurrentTab(); } catch { /* Ignore */ }
                 _dialogService.ShowWarning($"Lỗi khi tạo hình ảnh 2D: {ex.Message}", "Lỗi");
             }
         }

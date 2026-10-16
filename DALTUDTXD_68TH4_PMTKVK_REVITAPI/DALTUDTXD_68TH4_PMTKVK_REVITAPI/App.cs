@@ -95,6 +95,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
 
                 RibbonPanel settings = application.CreateRibbonPanel(TabName, "Cài đặt");
                 AddSmallStack(settings, assemblyPath,
+                    Button("BtnSelectScaffoldSystems", "Chọn hệ giàn giáo", typeof(CmdSelectScaffoldSystems),
+                        "G", Color.FromRgb(15, 118, 110), "Chọn một hoặc nhiều hệ giàn giáo; nhiều hệ được bố trí theo vùng riêng, không đan xen."),
                     Button("BtnSaveSettings", "Lưu cấu hình", typeof(CmdSaveSettings),
                         "S", Color.FromRgb(71, 85, 105), "Lưu bộ thông số hiện hành."),
                     Button("BtnResetSettings", "Đặt lại mặc định", typeof(CmdResetSettings),

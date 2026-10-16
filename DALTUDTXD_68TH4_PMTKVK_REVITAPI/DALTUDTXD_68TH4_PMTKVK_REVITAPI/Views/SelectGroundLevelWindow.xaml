@@ -12,7 +12,7 @@
         
         <TextBlock Grid.Row="0" Text="Chọn tầng trệt cho dự án. Các tầng nằm bên trên tầng này sẽ mặc định sử dụng cột chống (shoring props)." TextWrapping="Wrap" Margin="0,0,0,15" Foreground="#34495E" />
         
-        <ComboBox Grid.Row="1" x:Name="LevelComboBox" DisplayMemberPath="Name" Height="30" FontSize="14" VerticalContentAlignment="Center"/>
+        <ComboBox Grid.Row="1" x:Name="LevelComboBox" DisplayMemberPath="DisplayName" Height="30" FontSize="14" VerticalContentAlignment="Center"/>
         
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Xác nhận" Width="90" Height="30" Margin="0,0,10,0" Background="#3498DB" Foreground="White" FontWeight="Bold" Click="btnOk_Click"/>

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models;
 
@@ -25,7 +27,13 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views
             }
             else if (levels.Count > 0)
             {
-                LevelComboBox.SelectedIndex = 0;
+                // Ground floor is normally the level nearest project elevation 0.
+                // Defaulting to the lowest level accidentally selected pile-cap/
+                // foundation levels and enabled shoring below the actual ground floor.
+                LevelComboBox.SelectedItem = levels
+                    .OrderBy(level => Math.Abs(level.Elevation))
+                    .ThenByDescending(level => level.Elevation)
+                    .First();
             }
         }
 

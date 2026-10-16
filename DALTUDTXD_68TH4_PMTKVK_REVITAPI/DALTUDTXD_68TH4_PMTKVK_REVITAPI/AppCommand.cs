@@ -74,6 +74,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
                         sharedViewModel.DisposePreviewControl();
                     }
 
+                    if (sharedViewModel.TryTakeEditablePreviewRequest(out ElementId editableViewId))
+                    {
+                        if (doc.GetElement(editableViewId) is View3D editableView)
+                        {
+                            NativeRevitFormworkPreviewService.PrepareEditablePreviewView(doc, editableView);
+                            uiDoc.ActiveView = editableView;
+                        }
+                        break;
+                    }
+
                     if (sharedViewModel.IsSelectingSlab || sharedViewModel.IsSweepSelectingSlab ||
                         sharedViewModel.IsSelectingBeam || sharedViewModel.IsSweepSelectingBeam ||
                         sharedViewModel.IsSelectingColumn || sharedViewModel.IsSweepSelectingColumn ||
@@ -555,6 +565,13 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI
     }
 
     // ── Cài Đặt ──
+
+    [Transaction(TransactionMode.Manual)]
+    public class CmdSelectScaffoldSystems : AppCommandBase
+    {
+        protected override string TargetTab => "ThongSoView";
+        protected override string TargetAction => "SelectScaffoldSystems";
+    }
 
     [Transaction(TransactionMode.Manual)]
     public class CmdSaveSettings : AppCommandBase

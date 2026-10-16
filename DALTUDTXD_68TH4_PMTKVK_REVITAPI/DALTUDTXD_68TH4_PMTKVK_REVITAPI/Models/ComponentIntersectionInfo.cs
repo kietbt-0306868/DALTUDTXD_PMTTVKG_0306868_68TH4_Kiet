@@ -38,6 +38,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public List<FormworkLengthInterval> BeamColumnGaps { get; } = new List<FormworkLengthInterval>();
         public bool HasBeamSideClassification { get; set; }
         public bool IsPerimeterBeam { get; set; }
+        // +1 means the slab/interior side is the positive local cross-axis of the
+        // beam, -1 means the negative side, and 0 means an interior/unclassified
+        // beam. The value is derived from the actual slab top faces (including
+        // openings) and is used to point fixed surface ties inward.
+        public int BeamInteriorSideSign { get; set; }
 
         // +local X, -local X, +local Y, -local Y. Each value is the
         // vertical height occupied by a beam on that column face.

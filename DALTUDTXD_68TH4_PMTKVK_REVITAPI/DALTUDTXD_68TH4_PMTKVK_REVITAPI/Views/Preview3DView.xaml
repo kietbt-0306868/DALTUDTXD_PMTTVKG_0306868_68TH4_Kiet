@@ -31,6 +31,36 @@
                            FontSize="10"
                            Foreground="#7F8C8D"
                            Margin="0,3,0,0" />
+                <TextBlock Text="{Binding GroundFloorShoringRuleText}"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           Foreground="#0F766E"
+                           TextWrapping="Wrap"
+                           MaxWidth="610"
+                           Margin="0,4,0,0" />
+                <WrapPanel Margin="0,8,0,0">
+                    <Ellipse Width="10" Height="10" Fill="#2563EB" Margin="0,2,4,0"/>
+                    <TextBlock Text="Cây chống" FontSize="10" Margin="0,0,12,0"/>
+                    <Ellipse Width="10" Height="10" Fill="#F97316" Margin="0,2,4,0"/>
+                    <TextBlock Text="Gông/kẹp" FontSize="10" Margin="0,0,12,0"/>
+                    <Ellipse Width="10" Height="10" Fill="#9333EA" Margin="0,2,4,0"/>
+                    <TextBlock Text="Ty ren" FontSize="10" Margin="0,0,12,0"/>
+                    <Ellipse Width="10" Height="10" Fill="#16A34A" Margin="0,2,4,0"/>
+                    <TextBlock Text="Giằng/chống xiên" FontSize="10"/>
+                </WrapPanel>
+                <TextBlock Text="{Binding AccessoryInteractionText}"
+                           FontSize="10" Foreground="#475569" Margin="0,7,0,0"
+                           TextWrapping="Wrap" MaxWidth="610"/>
+                <Button Content="DỰNG PHỤ KIỆN FAMILY CÓ THỂ CHỈNH SỬA"
+                        Command="{Binding RenderEditableFamiliesCommand}"
+                        HorizontalAlignment="Left" Margin="0,7,0,0" Padding="10,5"
+                        Background="#6D28D9" Foreground="White" BorderThickness="0"
+                        FontSize="10" FontWeight="SemiBold"/>
+                <Button Content="MỞ VIEW REVIT ĐỂ CHỌN VÀ CHỈNH SỬA FAMILY"
+                        Command="{Binding OpenEditableRevitViewCommand}"
+                        HorizontalAlignment="Left" Margin="0,5,0,0" Padding="10,5"
+                        Background="#0F766E" Foreground="White" BorderThickness="0"
+                        FontSize="10" FontWeight="SemiBold"/>
             </StackPanel>
         </Border>
 

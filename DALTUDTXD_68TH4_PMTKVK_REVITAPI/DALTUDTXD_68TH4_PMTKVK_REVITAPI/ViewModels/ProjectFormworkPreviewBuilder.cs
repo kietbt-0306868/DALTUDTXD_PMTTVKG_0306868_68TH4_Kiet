@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using Autodesk.Revit.DB;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services;
 using HelixToolkit.Wpf.SharpDX;
 using HelixToolkit.SharpDX;
 using Point3D = System.Windows.Media.Media3D.Point3D;
@@ -123,7 +124,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private readonly Document _document;
         private Point3D _origin;
         internal Point3D CoordinateOriginMm => _origin;
-        private List<double> _levelElevationsMm;
         private List<Level> _levels;
         private Options _geometryOptions;
         private bool _compactLod;
@@ -183,10 +183,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 .Cast<Level>()
                 .OrderBy(level => level.Elevation)
                 .ToList();
-            _levelElevationsMm = _levels.Select(level => level.Elevation * MmPerFoot).ToList();
             BuildColumnLocationCache(elements);
 
-            double angle = Math.Max(30, Math.Min(75, Positive(_data.ColumnBraceAngle, 55))) * Math.PI / 180.0;
             foreach (Element element in elements.Where(candidate =>
                          candidate.Category.BuiltInCategory == BuiltInCategory.OST_StructuralColumns ||
                          candidate.Category.BuiltInCategory == BuiltInCategory.OST_Columns))
@@ -203,6 +201,18 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     ? new Point3D(X(locationPoint.Point.X), Y(locationPoint.Point.Y), (zBottom + zTop) / 2)
                     : new Point3D((X(box.Min.X) + X(box.Max.X)) / 2,
                         (Y(box.Min.Y) + Y(box.Max.Y)) / 2, (zBottom + zTop) / 2);
+
+                Models.FloorElementModel component = (_data.FloorElements ?? new List<Models.FloorElementModel>())
+                    .FirstOrDefault(model => model != null &&
+                                             (string.Equals(model.UniqueId, element.UniqueId,
+                                                  StringComparison.OrdinalIgnoreCase) ||
+                                              model.ElementId == element.Id.Value.ToString()));
+                Models.CalculationParameters columnDesign = component == null
+                    ? null
+                    : _data.GetComponentFormworkDesign(component.UniqueId)?.Parameters;
+                double angle = Math.Max(30, Math.Min(75,
+                    Positive(columnDesign?.ColumnBraceAngle ?? _data.ColumnBraceAngle, 55))) *
+                               Math.PI / 180.0;
 
                 foreach (ColumnStoreySegment segment in BuildColumnStoreySegments(element, zBottom, zTop))
                 {
@@ -255,7 +265,6 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 .Cast<Level>()
                 .OrderBy(level => level.Elevation)
                 .ToList();
-            _levelElevationsMm = _levels.Select(level => level.Elevation * MmPerFoot).ToList();
             BuildColumnLocationCache(elements);
 
             int floors = 0, beams = 0, columns = 0, foundations = 0;
@@ -327,7 +336,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 : string.Empty;
             string footSafetySummary = _renderedUnsupportedPropCount == 0
                 ? " · kiểm tra chân chống: 0 chân kê vào khoảng không"
-                : $" · LỖI: {_renderedUnsupportedPropCount} chân chống không có mặt đỡ";
+                : $" · {_renderedUnsupportedPropCount} vị trí chân chống không có mặt đỡ đã được loại";
             string restraintSummary = _data.ColumnBracePlacementModeIndex > 0
                 ? $" · phân đoạn cột trong/biên/góc {_interiorColumnCount}/{_perimeterColumnCount}/{_cornerColumnCount} · {_cableRestraintCount} cáp-tăng đơ"
                 : string.Empty;
@@ -340,6 +349,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
         private void SetCoordinateOrigin(IEnumerable<Element> elements)
         {
+            // A builder can be reused by the calculation and preview pipelines.  Never
+            // let footprints from an earlier refresh participate in a new bearing check.
+            _supportFootprints.Clear();
+            _foundationFootprints.Clear();
+            _groundWorkingFootprint = null;
+
             double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
             foreach (Element element in elements)
             {
@@ -665,9 +680,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                             primaryBottom + primaryH / 2), segment.LengthMm, primaryW, primaryH);
             }
 
-            double supportBottom = FindSupportElevation(box.Min.Z * MmPerFoot);
+            // Ground-floor and foundation-level members keep their formwork layers but
+            // do not receive an elevated prop/scaffold system. The user-selected ground
+            // floor is the common cutoff used by calculation, takeoff and native preview.
+            if (!_data.ShouldPlaceElevatedShoring(element, Models.StructuralComponentType.Slab)) return;
+
             double supportTop = primaryBottom;
-            if (supportTop - supportBottom < 500) return;
 
             double propDiameter = Positive(design?.CayChongDiameter ?? _data.CayChongDiameter, 48);
             foreach (double x in Positions(minX, maxX, supportSpacing, _compactLod ? 7 : 11))
@@ -676,11 +694,25 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 {
                     if (localCutouts.Any(c => x > c.MinXmm - 0.1 && x < c.MaxXmm + 0.1 &&
                                                   y > c.MinYmm - 0.1 && y < c.MaxYmm + 0.1)) continue;
-                    Point3D basePoint = new Point3D(x, y, supportBottom + 50);
-                    if (supportedSlab != null && !supportedSlab.Contains(basePoint, 50.0)) continue;
-                    if (!IsVerifiedSupportPoint(basePoint, supportBottom, 75.0)) continue;
-                    double postHeight = supportTop - supportBottom - 100;
-                    _steel.AddBox(new Point3D(x, y, supportBottom + 100 + postHeight / 2), propDiameter, propDiameter, postHeight);
+                    Point3D station = new Point3D(x, y, supportTop);
+                    if (supportedSlab != null && !supportedSlab.Contains(station, 50.0)) continue;
+                    if (!TryFindSupportElevationAt(station, supportTop, 75.0, out double supportBottom))
+                    {
+                        _renderedUnsupportedPropCount++;
+                        continue;
+                    }
+
+                    double postHeight = supportTop - supportBottom;
+                    if (postHeight < 500.0)
+                    {
+                        _renderedUnsupportedPropCount++;
+                        continue;
+                    }
+                    // Draw the complete bearing interval. The previous 100 mm offsets at
+                    // both ends made the post visibly float even when the selected support
+                    // elevation happened to be correct.
+                    _steel.AddBox(new Point3D(x, y, supportBottom + postHeight / 2),
+                        propDiameter, propDiameter, postHeight);
                 }
             }
         }
@@ -754,9 +786,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             List<SupportFootprint> beamTopSlabs = _supportFootprints
                 .Where(floor => Math.Abs(floor.TopZ - beamTop) <= 250.0)
                 .ToList();
-            double surfaceTieSpacing = Positive(design?.BeamEdgeSurfaceTieRodSpacing ?? 1000.0, 1000.0);
-            double surfaceTieDiameter = Positive(design?.BeamEdgeSurfaceTieRodDiameter ?? 12.0, 12.0);
-            double requestedSurfaceAnchor = Positive(design?.BeamEdgeSurfaceTieRodAnchorLength ?? 1200.0, 1200.0);
+            double surfaceTieSpacing = Positive(design?.BeamEdgeSurfaceTieRodSpacing ?? _data.BeamEdgeSurfaceTieRodSpacing, 1000.0);
+            double surfaceTieDiameter = Positive(design?.BeamEdgeSurfaceTieRodDiameter ?? _data.BeamEdgeSurfaceTieRodDiameter, 12.0);
+            double requestedSurfaceAnchor = Positive(design?.BeamEdgeSurfaceTieRodAnchorLength ?? _data.BeamEdgeSurfaceTieRodAnchorLength, 1200.0);
             foreach (double distance in Distances(length, surfaceTieSpacing, _compactLod ? 8 : 16))
             {
                 if (!IsDistanceInClearSegment(distance, clearBeamSegments)) continue;
@@ -788,21 +820,44 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 AddWingNut(rodStart, axis, cross, up, surfaceTieDiameter);
             }
 
-            double supportBottom = FindSupportElevation(box.Min.Z * MmPerFoot);
-            if (bottomZ - supportBottom > 500)
+            if (_data.ShouldPlaceElevatedShoring(element, Models.StructuralComponentType.Beam))
             {
                 double propSpacing = Positive(design?.BeamPropSpacing ?? _data.BeamPropSpacing, 1000);
                 double propDiameter = Positive(design?.CayChongDiameter ?? _data.CayChongDiameter, 48);
+                double primaryWalerDepth = Positive(
+                    design?.BeamPrimaryWalerDepth ?? _data.BeamPrimaryWalerDepth, 100);
+                double scaffoldBayWidth = Positive(
+                    design?.BeamScaffoldBayWidth ?? _data.BeamScaffoldBayWidth, 600);
+                double rowOffset = scaffoldBayWidth / 2.0;
+                double supportTop = bottomZ - bottomPly - joistDepth - primaryWalerDepth;
                 foreach (double distance in Distances(length, propSpacing, _compactLod ? 8 : 14))
                 {
                     if (!IsDistanceInClearSegment(distance, clearBeamSegments)) continue;
-                    Point3D point = start + axis * distance;
-                    double postBottom = supportBottom + 100;
-                    double postTop = bottomZ - bottomPly - 100;
-                    double postHeight = postTop - postBottom;
-                    if (postHeight > 0 && IsVerifiedSupportPoint(
-                            new Point3D(point.X, point.Y, supportBottom + 50), supportBottom, 75.0))
-                        _steel.AddBox(new Point3D(point.X, point.Y, postBottom + postHeight / 2), propDiameter, propDiameter, postHeight);
+                    Point3D centerStation = start + axis * distance;
+                    // BeamScaffoldBayWidth is the checked span of the primary waler
+                    // between two scaffold standards. BeamPropSpacing remains the
+                    // longitudinal pitch of those transverse two-row frames.
+                    foreach (double rowSign in new[] { -1.0, 1.0 })
+                    {
+                        Point3D point = centerStation + cross * (rowSign * rowOffset);
+                        Point3D station = new Point3D(point.X, point.Y, supportTop);
+                        if (!TryFindSupportElevationAt(station, supportTop, 75.0,
+                                out double supportBottom))
+                        {
+                            _renderedUnsupportedPropCount++;
+                            continue;
+                        }
+
+                        double postHeight = supportTop - supportBottom;
+                        if (postHeight < 500.0)
+                        {
+                            _renderedUnsupportedPropCount++;
+                            continue;
+                        }
+                        _steel.AddBox(new Point3D(point.X, point.Y,
+                                supportBottom + postHeight / 2),
+                            propDiameter, propDiameter, postHeight);
+                    }
                 }
             }
 
@@ -810,55 +865,77 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             // accept only feet that remain on the supporting floor footprint. This prevents
             // automatic design from calculating a brace that is absent from the 3D layout or
             // projects beyond a stepped/middle-plot boundary.
-            if ((design?.BeamPlacementModeIndex ?? _data.BeamPlacementModeIndex) != 1)
+            if ((design?.BeamPlacementModeIndex ?? _data.BeamPlacementModeIndex) == 2)
             {
-                double braceSpacing = Positive(design?.BeamSideBraceSpacing ?? _data.BeamSideBraceSpacing, 1200);
+                double braceSpacing = Positive(design?.BeamSideBraceSpacing ?? _data.BeamSideBraceSpacing, 1000);
                 double braceAngle = Math.Max(35, Math.Min(70, Positive(design?.BeamSideBraceAngle ?? _data.BeamSideBraceAngle, 55))) * Math.PI / 180.0;
                 double braceDiameter = Positive(design?.BeamSideBraceDiameter ?? _data.BeamSideBraceDiameter, 48);
                 int braceCount = Math.Max(1, design?.BeamSideBraceCountPerStation ?? _data.BeamSideBraceCountPerStation);
                 double attachZ = bottomZ + beamDepth * 0.70;
-                double footZ = supportBottom + 30;
-                double desiredRun = Math.Max(500, (attachZ - footZ) / Math.Tan(braceAngle));
-                List<SupportFootprint> supportSurfaces = _supportFootprints
-                    .Where(floor => Math.Abs(floor.TopZ - supportBottom) <= 250.0).ToList();
-                supportSurfaces.AddRange(_foundationFootprints
-                    .Where(foundation => Math.Abs(foundation.TopZ - supportBottom) <= 500.0));
 
                 foreach (double distance in Distances(length, braceSpacing, _compactLod ? 6 : 12))
                 {
                     if (!IsDistanceInClearSegment(distance, clearBeamSegments)) continue;
                     Point3D station = start + axis * distance;
-                    foreach (double sign in new[] { -1.0, 1.0 })
+                    double edgeProbeOffset = beamWidth / 2.0 + 250.0;
+                    Point3D plusProbe = station + cross * edgeProbeOffset;
+                    Point3D minusProbe = station - cross * edgeProbeOffset;
+                    plusProbe.Z = beamTop;
+                    minusProbe.Z = beamTop;
+                    bool plusHasSlab = beamTopSlabs.Any(floor =>
+                        floor.Contains(plusProbe, 40.0));
+                    bool minusHasSlab = beamTopSlabs.Any(floor =>
+                        floor.Contains(minusProbe, 40.0));
+
+                    // A true edge station has slab on exactly one side. Stations with
+                    // slab on both sides are middle beams; stations with no detected
+                    // slab are unresolved and must not receive a guessed exterior brace.
+                    if (plusHasSlab == minusHasSlab) continue;
+                    double exteriorSign = plusHasSlab ? -1.0 : 1.0;
+
+                    if (!TryFindSupportElevationAt(new Point3D(station.X, station.Y, attachZ),
+                            attachZ, 50.0, out double referenceBearing))
+                        referenceBearing = bottomZ - 1200.0;
+                    double desiredRun = Math.Max(500,
+                        (attachZ - (referenceBearing + 30.0)) / Math.Tan(braceAngle));
+                    double sign = exteriorSign;
                     {
                         double supportedRun = 0;
+                        double supportedElevation = double.NaN;
                         for (double run = desiredRun; run >= 250; run -= 100)
                         {
-                            Point3D candidate = new Point3D(station.X, station.Y, footZ) + cross * (sign * (beamWidth / 2 + run));
-                            bool supported = supportSurfaces.Any(surface => surface.Contains(candidate, 50.0));
-                            if (!supported && IsVerifiedSupportPoint(candidate, supportBottom, 50.0))
-                                supported = true;
-                            if (supported)
+                            Point3D candidate = new Point3D(station.X, station.Y, attachZ) +
+                                                cross * (sign * (beamWidth / 2 + run));
+                            if (TryFindSupportElevationAt(candidate, attachZ, 50.0,
+                                    out double candidateElevation))
                             {
                                 supportedRun = run;
+                                supportedElevation = candidateElevation;
                                 break;
                             }
                         }
                         if (supportedRun <= 0) continue;
 
                         Point3D attach = new Point3D(station.X, station.Y, attachZ) + cross * (sign * (beamWidth / 2 + sidePly + 35));
-                        Point3D foot = new Point3D(station.X, station.Y, footZ) + cross * (sign * (beamWidth / 2 + supportedRun));
+                        Point3D foot = new Point3D(station.X, station.Y, supportedElevation + 30.0) +
+                                       cross * (sign * (beamWidth / 2 + supportedRun));
                         bool renderedBrace = false;
+                        Point3D renderedPlatePoint = foot;
                         for (int braceIndex = 0; braceIndex < braceCount; braceIndex++)
                         {
                             double longitudinalOffset = (braceIndex - (braceCount - 1) / 2.0) * (braceDiameter + 35);
                             Vector3D offset = axis * longitudinalOffset;
-                            Point3D actualFoot = foot + offset;
-                            if (!IsVerifiedSupportPoint(actualFoot, supportBottom, 50.0)) continue;
+                            Point3D actualFootPlan = foot + offset;
+                            if (!TryFindSupportElevationAt(actualFootPlan, attachZ, 50.0,
+                                    out double actualBearing)) continue;
+                            Point3D actualFoot = new Point3D(actualFootPlan.X, actualFootPlan.Y,
+                                actualBearing + 30.0);
                             _bracing.AddCylinder(actualFoot, attach + offset, braceDiameter, 8);
+                            renderedPlatePoint = actualFoot;
                             renderedBrace = true;
                         }
                         if (renderedBrace)
-                            _steel.AddOrientedBox(foot, axis, cross, up, 180, 140, 12);
+                            _steel.AddOrientedBox(renderedPlatePoint, axis, cross, up, 180, 140, 12);
                     }
                 }
             }
@@ -1123,19 +1200,44 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             List<SupportFootprint> floorsAtElevation = _supportFootprints
                 .Where(floor => Math.Abs(floor.TopZ - zBottom) <= 450.0)
                 .ToList();
-            List<SupportFootprint> floorsAtLevel = floorsAtElevation
-                .Where(floor => levelValue < 0 || floor.LevelId == levelValue)
+            // Revit LevelId is metadata, not a physical bearing boundary.  Split slabs,
+            // offset slabs and duplicated structural levels commonly share one actual
+            // construction elevation while carrying different LevelIds.  Keep every
+            // co-elevated slab and use a matching LevelId only as a tie-breaker.
+            List<SupportFootprint> floorsAtSupport = floorsAtElevation
+                .OrderBy(floor => levelValue >= 0 && floor.LevelId == levelValue ? 0 : 1)
+                .ThenBy(floor => Math.Abs(floor.TopZ - zBottom))
                 .ToList();
-            List<SupportFootprint> floorsAtSupport = floorsAtLevel.Count > 0
-                ? floorsAtLevel
-                : floorsAtElevation;
             Vector3D[] directions = { xAxis, -xAxis, yAxis, -yAxis };
+            double attachmentRise = Math.Max(300.0, height * 0.85);
+            double minimumRun = Math.Max(600.0,
+                attachmentRise / Math.Tan(75.0 * Math.PI / 180.0));
             for (int index = 0; index < directions.Length; index++)
             {
                 Vector3D direction = directions[index];
                 double faceDistance = FaceDistanceAlong(direction, width, depth, xAxis, yAxis);
                 Point3D foot = new Point3D(center.X, center.Y, zBottom + 60) + direction * (faceDistance + braceRun);
-                bool onSlab = floorsAtSupport.Any(floor => floor.Contains(foot, 100.0));
+                SupportFootprint slabBearing = null;
+                double resolvedRun = braceRun;
+                // Do not reject a column merely because the single nominal-angle foot
+                // lands just beyond an edge or inside an opening.  Search radially toward
+                // the column down to the steepest permitted prop angle, always validating
+                // the complete 200 mm base patch against real top-face geometry.
+                for (double candidateRun = braceRun;
+                     candidateRun >= minimumRun - 0.1;
+                     candidateRun -= 100.0)
+                {
+                    Point3D candidate = new Point3D(center.X, center.Y, zBottom + 60) +
+                                        direction * (faceDistance + candidateRun);
+                    slabBearing = floorsAtSupport.FirstOrDefault(floor => floor.Contains(candidate, 100.0));
+                    if (slabBearing == null) continue;
+                    foot = candidate;
+                    resolvedRun = candidateRun;
+                    break;
+                }
+                bool onSlab = slabBearing != null;
+                if (slabBearing != null)
+                    foot.Z = slabBearing.TopZ + 60.0;
                 bool insideOuterOutline = floorsAtSupport.Any(floor => floor.ContainsOverall(foot, 30.0));
                 Models.BraceFootSupportKind supportKind = onSlab
                     ? Models.BraceFootSupportKind.Slab
@@ -1147,6 +1249,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     DirectionIndex = index,
                     LocalDirection = direction,
                     ProposedFootPoint = foot,
+                    ResolvedRunMm = resolvedRun,
                     SupportKind = supportKind
                 });
             }
@@ -1164,13 +1267,21 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 foreach (Models.BraceDirectionAssessment direction in assessment.Directions
                              .Where(direction => !direction.CanPlaceProp))
                 {
-                    bool onFoundationFoot = _foundationFootprints.Any(foundation =>
-                        Math.Abs(foundation.TopZ - zBottom) <= 800.0 &&
-                        foundation.Contains(direction.ProposedFootPoint, 100.0));
+                    SupportFootprint foundationBearing = _foundationFootprints
+                        .Where(foundation => Math.Abs(foundation.TopZ - zBottom) <= 800.0 &&
+                                             foundation.Contains(direction.ProposedFootPoint, 100.0))
+                        .OrderBy(foundation => Math.Abs(foundation.TopZ - zBottom))
+                        .FirstOrDefault();
+                    bool onFoundationFoot = foundationBearing != null;
                     bool onBoundedGround = _groundWorkingFootprint != null &&
                                            _groundWorkingFootprint.Contains(direction.ProposedFootPoint, 100.0);
                     if (onFoundationFoot || onBoundedGround)
+                    {
                         direction.SupportKind = Models.BraceFootSupportKind.FoundationOrGround;
+                        Point3D supportedFoot = direction.ProposedFootPoint;
+                        supportedFoot.Z = (foundationBearing ?? _groundWorkingFootprint).TopZ + 60.0;
+                        direction.ProposedFootPoint = supportedFoot;
+                    }
                 }
                 assessment.DerivedType = Models.ColumnBraceDerivedType.FoundationGround;
                 int supportedGroundDirections = assessment.Directions.Count(direction => direction.CanPlaceProp);
@@ -1248,7 +1359,14 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             {
                 if (type == Models.ColumnBraceDerivedType.InternalOpeningWarning) _openingColumnCount++;
                 else _warningColumnCount++;
-                assessment.RecommendedAction += " No automatic props, ties or anchors were generated; an engineer override is required.";
+                // A warning on one face must not suppress props whose feet on the other
+                // faces have already been proved.  Keep those physical restraints visible
+                // and flag only the unresolved directions for engineering action.
+                AddConfiguredPushPullProps(valid, center, zBottom, attachZ, width, depth, ply,
+                    stiffenerDepth, xAxis, yAxis, up, false);
+                assessment.RecommendedAction += valid.Count > 0
+                    ? $" {valid.Count} verified support direction(s) were generated; unresolved directions still require an inward anchor/tie or engineer override."
+                    : " No verified support direction was found; an engineer override is required.";
                 return;
             }
 
@@ -1353,8 +1471,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             // ColumnBraceCount is the total number of restraint assemblies, not a fixed
             // one-prop-per-face switch. Distribute the designed quantity only among the
             // directions whose proposed feet have verified bearing surfaces.
-            int requestedCount = Math.Max(validDirections.Count,
-                Math.Max(1, _activeColumnDesign?.ColumnBraceCount ?? _data.ColumnBraceCount));
+            int requestedCount = Math.Min(validDirections.Count * 2,
+                Math.Max(validDirections.Count,
+                    Math.Max(1, _activeColumnDesign?.ColumnBraceCount ?? _data.ColumnBraceCount)));
             int baseCount = requestedCount / validDirections.Count;
             int remainder = requestedCount % validDirections.Count;
             for (int directionIndex = 0; directionIndex < validDirections.Count; directionIndex++)
@@ -1362,8 +1481,17 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 int countOnDirection = baseCount + (directionIndex < remainder ? 1 : 0);
                 for (int propIndex = 0; propIndex < countOnDirection; propIndex++)
                 {
-                    // Parallel props are separated along the tangent to the column face.
-                    double tangentOffset = (propIndex - (countOnDirection - 1) / 2.0) * 180.0;
+                    // Keep parallel attachment plates within the usable column face.
+                    double faceLength = validDirections[directionIndex].DirectionIndex < 2
+                        ? depth
+                        : width;
+                    double halfOffset = countOnDirection <= 1
+                        ? 0.0
+                        : Math.Min(90.0, Math.Max(0.0, (faceLength - 80.0) / 2.0));
+                    double tangentOffset = countOnDirection <= 1
+                        ? 0.0
+                        : -halfOffset + 2.0 * halfOffset * propIndex /
+                          (countOnDirection - 1);
                     AddPushPullProp(center, zBottom, attachZ, width, depth, ply, stiffenerDepth,
                         xAxis, yAxis, up, validDirections[directionIndex], useGroundSolePlate,
                         tangentOffset);
@@ -1413,9 +1541,41 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     appliedOffset = 0.0;
                 top += tangent * appliedOffset;
             }
-            _steel.AddCylinder(foot, top, 42, 8);
-            _steel.AddCylinder(foot + (top - foot) * 0.43, foot + (top - foot) * 0.57, 60, 8);
-            _steel.AddOrientedBox(foot, xAxis, yAxis, up, 180, 140, 12);
+            // Keep the retained-mode preview on the same per-column accessory
+            // section selected by the calculation/auto-design pipeline.  The old
+            // fixed D42 shaft with a D60 sleeve made every load class look alike
+            // and could disagree with both the native RFA and the takeoff.
+            NativeAccessoryFamilyDimensionPolicy.PushPullProfile profile =
+                NativeAccessoryFamilyDimensionPolicy.GetPushPullProfile(
+                    _activeColumnDesign?.ColumnBraceAllowableCapacity ??
+                    _data.ColumnBraceAllowableCapacity,
+                    _activeColumnDesign?.ColumnBraceDiameter ?? _data.ColumnBraceDiameter,
+                    _activeColumnDesign?.ColumnBraceThickness ?? _data.ColumnBraceThickness);
+            double outerDiameter = profile.OuterDiameterMm;
+            double wallThickness = profile.WallThicknessMm;
+            double innerDiameter = profile.InnerStageDiameterMm;
+            double sleeveDiameter = profile.SleeveDiameterMm;
+            double collarDiameter = profile.CollarDiameterMm;
+            Vector3D propAxis = top - foot;
+
+            // Two overlapping telescoping stages plus the central adjustment
+            // sleeve reproduce the physical profile without a costly hollow mesh.
+            _steel.AddCylinder(foot, foot + propAxis * 0.57, outerDiameter, 8);
+            _steel.AddCylinder(foot + propAxis * 0.43, top, innerDiameter, 8);
+            _steel.AddCylinder(foot + propAxis * 0.44, foot + propAxis * 0.56,
+                sleeveDiameter, 8);
+            _steel.AddCylinder(foot + propAxis * 0.42, foot + propAxis * 0.44,
+                collarDiameter, 8);
+            _steel.AddCylinder(foot + propAxis * 0.56, foot + propAxis * 0.58,
+                collarDiameter, 8);
+
+            double basePlateWidth = Positive(
+                _activeColumnDesign?.SupportBasePlateWidth ?? _data.SupportBasePlateWidth, 150);
+            double basePlateDepth = Positive(
+                _activeColumnDesign?.SupportBasePlateDepth ?? _data.SupportBasePlateDepth, 150);
+            double basePlateThickness = Math.Max(8, wallThickness * 4);
+            _steel.AddOrientedBox(foot, xAxis, yAxis, up,
+                basePlateWidth, basePlateDepth, basePlateThickness);
             if (useGroundSolePlate)
                 _timber.AddOrientedBox(new Point3D(foot.X, foot.Y, zBottom + 20), xAxis, yAxis, up, 500, 500, 40);
             assessment.WasRenderedAsProp = true;
@@ -1721,12 +1881,32 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 distance >= segment.StartMm - 0.1 && distance <= segment.EndMm + 0.1);
         }
 
-        private double FindSupportElevation(double absoluteBottomMm)
+        /// <summary>
+        /// Resolves the actual bearing surface at one XY station. Revit level elevations
+        /// are only datums; they are not proof that a slab or foundation exists under the
+        /// prop. Choosing the highest verified top face below the accessory target also
+        /// handles stepped floor plates and double-height openings correctly.
+        /// </summary>
+        private bool TryFindSupportElevationAt(Point3D station, double targetTop,
+            double clearance, out double supportElevation)
         {
-            List<double> levelsBelow = _levelElevationsMm
-                .Where(z => z < absoluteBottomMm - 150)
-                .ToList();
-            return levelsBelow.Count == 0 ? 0 : levelsBelow[levelsBelow.Count - 1] - _origin.Z;
+            const double minimumClearHeight = 300.0;
+            SupportFootprint bearing = _supportFootprints
+                .Concat(_foundationFootprints)
+                .Where(footprint => footprint.TopZ <= targetTop - minimumClearHeight)
+                .Where(footprint => footprint.Contains(
+                    new Point3D(station.X, station.Y, footprint.TopZ), clearance))
+                .OrderByDescending(footprint => footprint.TopZ)
+                .FirstOrDefault();
+
+            if (bearing == null)
+            {
+                supportElevation = double.NaN;
+                return false;
+            }
+
+            supportElevation = bearing.TopZ;
+            return true;
         }
 
         private static ElementId GetElementLevelId(Element element)

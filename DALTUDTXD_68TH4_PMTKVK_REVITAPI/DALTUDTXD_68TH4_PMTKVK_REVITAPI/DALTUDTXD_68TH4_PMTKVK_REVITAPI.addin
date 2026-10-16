@@ -2,7 +2,7 @@
 <RevitAddIns>
   <AddIn Type="Application">
     <Name>Thiết kế ván khuôn sàn</Name>
-    <Assembly>DALTUDTXD_68TH4_PMTKVK_REVITAPI\DALTUDTXD_68TH4_PMTKVK_REVITAPI.dll</Assembly>
+    <Assembly>.\DALTUDTXD_68TH4_PMTKVK_REVITAPI\DALTUDTXD_68TH4_PMTKVK_REVITAPI.dll</Assembly>
     <FullClassName>DALTUDTXD_68TH4_PMTKVK_REVITAPI.RevitApp</FullClassName>
     <ClientId>9f844de1-ee38-4e89-98ff-8a62f558a74f</ClientId>
     <VendorId>KietBT</VendorId>

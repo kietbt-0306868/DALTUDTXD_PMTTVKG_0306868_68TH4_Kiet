@@ -766,6 +766,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                         SupportHeadBearingAllowable = _SharedDataViewModel.SupportHeadBearingAllowable,
                         SupportJackExtension = _SharedDataViewModel.SupportJackExtension,
                         SupportJackExtensionLimit = _SharedDataViewModel.SupportJackExtensionLimit,
+                        SelectedScaffoldSystems = _SharedDataViewModel.SelectedScaffoldSystems,
                         SoNhipVanMat = _SharedDataViewModel.SoNhipVanMat,
                         SoNhipXaGoPhu = _SharedDataViewModel.SoNhipXaGoPhu,
                         SoNhipXaGoChinh = _SharedDataViewModel.SoNhipXaGoChinh,
@@ -791,6 +792,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                         BeamTieRodDiameter = _SharedDataViewModel.BeamTieRodDiameter,
                         BeamTieRodSpacing = _SharedDataViewModel.BeamTieRodSpacing,
                         BeamTieRodAllowableCapacity = _SharedDataViewModel.BeamTieRodAllowableCapacity,
+                        BeamEdgeSurfaceTieRodDiameter = _SharedDataViewModel.BeamEdgeSurfaceTieRodDiameter,
+                        BeamEdgeSurfaceTieRodSpacing = _SharedDataViewModel.BeamEdgeSurfaceTieRodSpacing,
+                        BeamEdgeSurfaceTieRodAnchorLength = _SharedDataViewModel.BeamEdgeSurfaceTieRodAnchorLength,
+                        BeamEdgeSurfaceTieRodAllowableCapacity = _SharedDataViewModel.BeamEdgeSurfaceTieRodAllowableCapacity,
                         BeamSideBraceSpacing = _SharedDataViewModel.BeamSideBraceSpacing,
                         BeamSideBraceAngle = _SharedDataViewModel.BeamSideBraceAngle,
                         BeamSideBraceDiameter = _SharedDataViewModel.BeamSideBraceDiameter,
@@ -825,6 +830,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                         ColumnTieRodAllowableCapacity = _SharedDataViewModel.ColumnTieRodAllowableCapacity,
                         ColumnBraceCount = _SharedDataViewModel.ColumnBraceCount,
                         ColumnBraceAngle = _SharedDataViewModel.ColumnBraceAngle,
+                        ColumnBraceDiameter = _SharedDataViewModel.ColumnBraceDiameter,
+                        ColumnBraceThickness = _SharedDataViewModel.ColumnBraceThickness,
                         ColumnBraceAllowableCapacity = _SharedDataViewModel.ColumnBraceAllowableCapacity,
                         ColumnBracePlacementModeIndex = _SharedDataViewModel.ColumnBracePlacementModeIndex,
                         ColumnNeighbourTieThreshold = _SharedDataViewModel.ColumnNeighbourTieThreshold,
@@ -1037,6 +1044,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 e.PropertyName == nameof(SharedDataViewModel.XaGoChinhHeight) ||
                 e.PropertyName == nameof(SharedDataViewModel.CayChongDiameter) ||
                 e.PropertyName == nameof(SharedDataViewModel.CayChongThickness) ||
+                e.PropertyName == nameof(SharedDataViewModel.SelectedScaffoldSystems) ||
                 e.PropertyName == nameof(SharedDataViewModel.CurrentComponentType) ||
                 e.PropertyName == nameof(SharedDataViewModel.BeamWidth) ||
                 e.PropertyName == nameof(SharedDataViewModel.BeamDepth) ||
@@ -1289,6 +1297,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 SupportBasePlateDepth = _SharedDataViewModel.SupportBasePlateDepth,
                 SupportSolePlateWidth = _SharedDataViewModel.SupportSolePlateWidth,
                 SupportSolePlateDepth = _SharedDataViewModel.SupportSolePlateDepth,
+                SelectedScaffoldSystems = _SharedDataViewModel.SelectedScaffoldSystems,
                 BeamBottomPlywoodThickness = _SharedDataViewModel.BeamBottomPlywoodThickness,
                 BeamSidePlywoodThickness = _SharedDataViewModel.BeamSidePlywoodThickness,
                 BeamBottomYokeSpacing = _SharedDataViewModel.BeamBottomYokeSpacing,
@@ -1300,10 +1309,18 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 BeamPrimaryWalerDepth = _SharedDataViewModel.BeamPrimaryWalerDepth,
                 BeamTieRodDiameter = _SharedDataViewModel.BeamTieRodDiameter,
                 BeamTieRodSpacing = _SharedDataViewModel.BeamTieRodSpacing,
+                BeamTieRodAllowableCapacity = _SharedDataViewModel.BeamTieRodAllowableCapacity,
+                BeamEdgeSurfaceTieRodDiameter = _SharedDataViewModel.BeamEdgeSurfaceTieRodDiameter,
+                BeamEdgeSurfaceTieRodSpacing = _SharedDataViewModel.BeamEdgeSurfaceTieRodSpacing,
+                BeamEdgeSurfaceTieRodAnchorLength = _SharedDataViewModel.BeamEdgeSurfaceTieRodAnchorLength,
+                BeamEdgeSurfaceTieRodAllowableCapacity = _SharedDataViewModel.BeamEdgeSurfaceTieRodAllowableCapacity,
                 BeamSideBraceSpacing = _SharedDataViewModel.BeamSideBraceSpacing,
+                BeamSideBraceAngle = _SharedDataViewModel.BeamSideBraceAngle,
                 BeamSideBraceDiameter = _SharedDataViewModel.BeamSideBraceDiameter,
                 BeamSideBraceThickness = _SharedDataViewModel.BeamSideBraceThickness,
                 BeamSideBraceCountPerStation = _SharedDataViewModel.BeamSideBraceCountPerStation,
+                BeamSideBraceAllowableCapacity = _SharedDataViewModel.BeamSideBraceAllowableCapacity,
+                BeamPlacementModeIndex = _SharedDataViewModel.BeamPlacementModeIndex,
                 ColumnPlywoodThickness = _SharedDataViewModel.ColumnPlywoodThickness,
                 ColumnStiffenerWidth = _SharedDataViewModel.ColumnStiffenerWidth,
                 ColumnStiffenerDepth = _SharedDataViewModel.ColumnStiffenerDepth,
@@ -1318,6 +1335,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 ColumnTieRodDiameter = _SharedDataViewModel.ColumnTieRodDiameter,
                 ColumnTieRodCountPerFace = _SharedDataViewModel.ColumnTieRodCountPerFace,
                 ColumnBraceCount = _SharedDataViewModel.ColumnBraceCount,
+                ColumnBraceDiameter = _SharedDataViewModel.ColumnBraceDiameter,
+                ColumnBraceThickness = _SharedDataViewModel.ColumnBraceThickness,
                 ColumnBraceAllowableCapacity = _SharedDataViewModel.ColumnBraceAllowableCapacity,
                 ColumnCableAllowableCapacity = _SharedDataViewModel.ColumnCableAllowableCapacity,
                 ColumnTurnbuckleAllowableCapacity = _SharedDataViewModel.ColumnTurnbuckleAllowableCapacity,
@@ -1326,6 +1345,42 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 ColumnWorkPlatformWidth = _SharedDataViewModel.ColumnWorkPlatformWidth,
                 ColumnGuardrailHeight = _SharedDataViewModel.ColumnGuardrailHeight
             };
+        }
+
+        private static bool UsesMultipleScaffoldSystems(CalculationParameters parameters)
+        {
+            ScaffoldSystemType systems = parameters.SelectedScaffoldSystems.Normalize();
+            return systems != ScaffoldSystemType.Frame &&
+                   systems != ScaffoldSystemType.Wedge &&
+                   systems != ScaffoldSystemType.Ringlock;
+        }
+
+        private static string ScaffoldSupportMaterialName(CalculationParameters parameters,
+            string scope)
+        {
+            string systems = parameters.SelectedScaffoldSystems.ToDisplayText();
+            return UsesMultipleScaffoldSystems(parameters)
+                ? $"Nút chống quy đổi {scope} · nhiều hệ theo vùng ({systems})"
+                : $"Chống đứng {scope} · {systems}";
+        }
+
+        private static string ScaffoldSupportSpecification(CalculationParameters parameters)
+        {
+            string specification =
+                $"Tiết diện tính quy đổi Ø{parameters.CayChongDiameter:F0} x " +
+                $"{parameters.CayChongThickness:F1} mm; [P]={parameters.SupportRatedCapacity:F1} kN";
+            return UsesMultipleScaffoldSystems(parameters)
+                ? specification + "; phân bổ từng hệ theo vùng 3D, xác nhận module/[P]/liên kết theo catalogue nhà sản xuất"
+                : specification + "; xác nhận module và [P] theo catalogue nhà sản xuất";
+        }
+
+        private static string ScaffoldSupportUnit(CalculationParameters parameters)
+        {
+            ScaffoldSystemType systems = parameters.SelectedScaffoldSystems.Normalize();
+            if (UsesMultipleScaffoldSystems(parameters)) return "Nút";
+            // The current estimator counts bearing nodes, not complete paired H frames.
+            // Calling this quantity "Khung" or "Cây" would overstate BOM precision.
+            return systems == ScaffoldSystemType.Frame ? "Vị trí" : "Cây";
         }
 
         private List<MaterialItem> CalculateQuantities(double area, double perimeter, double thicknessMm,
@@ -1346,22 +1401,24 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             double joist2Len = Math.Ceiling(matSanArea * (1000.0 / Math.Max(1, p.Joist2Spacing)) * 1.05);
             
             double propsPerM2 = 1.0 / ((Math.Max(1, p.Joist2Spacing) / 1000.0) * (Math.Max(1, p.SupportSpacing) / 1000.0));
-            double propCount = Math.Ceiling(matSanArea * propsPerM2 * 1.05);
+            double propCount = p.IsGroundLevel ? 0 : Math.Ceiling(matSanArea * propsPerM2 * 1.05);
             double diagonalBraceCount = Math.Ceiling(propCount / 6.0) * 2;
+            string scaffoldSystems = p.SelectedScaffoldSystems.ToDisplayText();
+            string supportUnit = ScaffoldSupportUnit(p);
             return new List<MaterialItem>
             {
                 new MaterialItem { MaterialName = $"Ván khuôn mặt sàn (Phủ phim)", Specification = $"{p.VanMatThickness:F0} x 1220 x 2440 mm", Quantity = plywoodMatSan, Unit = "Tấm" },
                 new MaterialItem { MaterialName = $"Ván khuôn thành sàn (Phủ phim)", Specification = $"{p.VanMatThickness:F0} x {thicknessMm:F0} mm", Quantity = lengthThanhSan, Unit = "m" },
                 new MaterialItem { MaterialName = $"Gỗ xà gồ phụ (Lớp 1)", Specification = $"{p.XaGoPhuWidth:F0} x {p.XaGoPhuHeight:F0} mm", Quantity = joist1Len, Unit = "m" },
                 new MaterialItem { MaterialName = $"Gỗ xà gồ chính (Lớp 2)", Specification = $"{p.XaGoChinhWidth:F0} x {p.XaGoChinhHeight:F0} mm", Quantity = joist2Len, Unit = "m" },
-                new MaterialItem { MaterialName = "Cây chống đứng", Specification = $"Thép ống Ø{p.CayChongDiameter:F0} x {p.CayChongThickness:F0} mm", Quantity = propCount, Unit = "Cây" },
-                new MaterialItem { MaterialName = "Kích chân", Specification = $"Độ vươn ≤ {p.SupportJackExtensionLimit:F0} mm", Quantity = propCount, Unit = "Cái" },
-                new MaterialItem { MaterialName = "Kích đầu U", Specification = $"Bản đầu {p.SupportHeadPlateWidth:F0}×{p.SupportHeadPlateDepth:F0} mm", Quantity = propCount, Unit = "Cái" },
-                new MaterialItem { MaterialName = "Bản đế cây chống", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = propCount, Unit = "Cái" },
-                new MaterialItem { MaterialName = "Tấm kê chân chống", Specification = $"{p.SupportSolePlateWidth:F0}×{p.SupportSolePlateDepth:F0} mm", Quantity = propCount, Unit = "Tấm" },
-                new MaterialItem { MaterialName = "Thanh giằng chéo hệ chống sàn", Specification = "Ống thép + khóa giáo", Quantity = diagonalBraceCount, Unit = "Thanh" },
-                new MaterialItem { MaterialName = "Khóa/cùm giằng hệ chống", Specification = "Khóa xoay", Quantity = diagonalBraceCount * 2, Unit = "Cái" }
-            };
+                new MaterialItem { MaterialName = ScaffoldSupportMaterialName(p, "sàn"), Specification = ScaffoldSupportSpecification(p), Quantity = propCount, Unit = supportUnit },
+                new MaterialItem { MaterialName = $"Kích chân · {scaffoldSystems}", Specification = $"Độ vươn ≤ {p.SupportJackExtensionLimit:F0} mm; đúng loại đầu nối của hệ", Quantity = propCount, Unit = "Cái" },
+                new MaterialItem { MaterialName = $"Kích đầu U · {scaffoldSystems}", Specification = $"Bản đầu {p.SupportHeadPlateWidth:F0}×{p.SupportHeadPlateDepth:F0} mm; đúng loại đầu nối của hệ", Quantity = propCount, Unit = "Cái" },
+                new MaterialItem { MaterialName = $"Bản đế hệ chống · {scaffoldSystems}", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = propCount, Unit = "Cái" },
+                new MaterialItem { MaterialName = $"Tấm kê hệ chống · {scaffoldSystems}", Specification = $"{p.SupportSolePlateWidth:F0}×{p.SupportSolePlateDepth:F0} mm", Quantity = propCount, Unit = "Tấm" },
+                new MaterialItem { MaterialName = $"Thanh giằng chéo · {scaffoldSystems}", Specification = "Số lượng quy đổi từ lưới chống; quy cách theo catalogue nhà sản xuất", Quantity = diagonalBraceCount, Unit = "Thanh" },
+                new MaterialItem { MaterialName = $"Liên kết/khóa giằng · {scaffoldSystems}", Specification = "Dùng đúng chốt nêm/đĩa/khóa của từng hệ; không nối lẫn hệ", Quantity = diagonalBraceCount * 2, Unit = "Cái" }
+            }.Where(item => item.Quantity > 0).ToList();
         }
 
         private List<MaterialItem> CalculateFoundationQuantities(
@@ -1409,15 +1466,26 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
             double bottomYokeCount = Math.Ceiling(lengthMm / Math.Max(1, p.BeamBottomYokeSpacing));
             double sideYokeCount = Math.Ceiling(lengthMm / Math.Max(1, p.BeamSideYokeSpacing));
-            double propCount = Math.Ceiling(lengthMm / Math.Max(1, p.BeamPropSpacing)) * 2;
+            double propCount = p.IsGroundLevel
+                ? 0
+                : Math.Ceiling(lengthMm / Math.Max(1, p.BeamPropSpacing)) * 2;
             double secondaryJoistLength = Math.Ceiling(bottomYokeCount * widthM * 1.10);
             double primaryWalerLength = Math.Ceiling(lengthM * 2 * 1.05);
-            double tieRodCount = Math.Ceiling(lengthMm / Math.Max(75, p.BeamTieRodSpacing)) * 2;
-            double sideBraceStations = Math.Ceiling(lengthMm / Math.Max(75, p.BeamSideBraceSpacing));
+            // Hai hàng ty xuyên thành xuất hiện ở cả dầm giữa và dầm biên.
+            // Ty chết trên mặt dầm biên được thống kê riêng bên dưới.
+            double tieRodCount = Math.Ceiling(lengthMm /
+                Math.Max(75, p.BeamTieRodSpacing)) * 2;
+            // Edge-only accessories are counted only after explicit/manual or
+            // intersection-based perimeter classification (mode 2).
+            double sideBraceStations = p.BeamPlacementModeIndex == 2
+                ? Math.Ceiling(lengthMm / Math.Max(300, p.BeamSideBraceSpacing))
+                : 0;
             double sideBraceCount = sideBraceStations * Math.Max(1, p.BeamSideBraceCountPerStation);
             double surfaceTieCount = p.BeamPlacementModeIndex == 2
                 ? Math.Ceiling(lengthMm / Math.Max(300, p.BeamEdgeSurfaceTieRodSpacing))
                 : 0;
+            string scaffoldSystems = p.SelectedScaffoldSystems.ToDisplayText();
+            string supportUnit = ScaffoldSupportUnit(p);
 
             var items = new List<MaterialItem>
             {
@@ -1426,15 +1494,21 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 new MaterialItem { MaterialName = "Xà gồ phụ đáy dầm", Specification = $"{p.BeamSecondaryJoistWidth:F0}×{p.BeamSecondaryJoistDepth:F0} mm", Quantity = secondaryJoistLength, Unit = "m" },
                 new MaterialItem { MaterialName = "Xà gồ chính dầm", Specification = $"{p.BeamPrimaryWalerWidth:F0}×{p.BeamPrimaryWalerDepth:F0} mm", Quantity = primaryWalerLength, Unit = "m" },
                 new MaterialItem { MaterialName = $"Gông/kẹp thành dầm", Specification = $"@{p.BeamSideYokeSpacing:F0} mm", Quantity = sideYokeCount * 2, Unit = "Bộ" },
-                new MaterialItem { MaterialName = "Ty giằng thành dầm", Specification = $"D{p.BeamTieRodDiameter:F0}", Quantity = tieRodCount, Unit = "Thanh" },
-                new MaterialItem { MaterialName = "Bát chuồn/đai ốc ty dầm", Specification = $"Cho ty D{p.BeamTieRodDiameter:F0}", Quantity = tieRodCount * 2, Unit = "Cái" },
-                new MaterialItem { MaterialName = "Cây chống đứng dầm", Specification = $"Thép ống Ø{p.CayChongDiameter:F0} x {p.CayChongThickness:F0} mm", Quantity = propCount, Unit = "Cây" },
-                new MaterialItem { MaterialName = "Kích chân chống dầm", Specification = $"Độ vươn ≤ {p.SupportJackExtensionLimit:F0} mm", Quantity = propCount, Unit = "Cái" },
-                new MaterialItem { MaterialName = "Kích đầu U dầm", Specification = $"{p.SupportHeadPlateWidth:F0}×{p.SupportHeadPlateDepth:F0} mm", Quantity = propCount, Unit = "Cái" },
-                new MaterialItem { MaterialName = "Bản đế/tấm kê chống dầm", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = propCount, Unit = "Bộ" },
-                new MaterialItem { MaterialName = "Chống xiên thành dầm biên", Specification = $"D{p.BeamSideBraceDiameter:F0}×{p.BeamSideBraceThickness:F1} mm", Quantity = sideBraceCount, Unit = "Cây" },
-                new MaterialItem { MaterialName = "Bản đế chống xiên dầm", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = sideBraceStations, Unit = "Cái" }
+                new MaterialItem { MaterialName = ScaffoldSupportMaterialName(p, "dầm"), Specification = ScaffoldSupportSpecification(p), Quantity = propCount, Unit = supportUnit },
+                new MaterialItem { MaterialName = $"Kích chân chống dầm · {scaffoldSystems}", Specification = $"Độ vươn ≤ {p.SupportJackExtensionLimit:F0} mm; đúng loại đầu nối của hệ", Quantity = propCount, Unit = "Cái" },
+                new MaterialItem { MaterialName = $"Kích đầu U dầm · {scaffoldSystems}", Specification = $"{p.SupportHeadPlateWidth:F0}×{p.SupportHeadPlateDepth:F0} mm; đúng loại đầu nối của hệ", Quantity = propCount, Unit = "Cái" },
+                new MaterialItem { MaterialName = $"Bản đế/tấm kê chống dầm · {scaffoldSystems}", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = propCount, Unit = "Bộ" }
             };
+            if (tieRodCount > 0)
+            {
+                items.Add(new MaterialItem { MaterialName = "Ty giằng xuyên thành dầm", Specification = $"D{p.BeamTieRodDiameter:F0}", Quantity = tieRodCount, Unit = "Thanh" });
+                items.Add(new MaterialItem { MaterialName = "Bát chuồn/đai ốc ty dầm", Specification = $"Cho ty D{p.BeamTieRodDiameter:F0}", Quantity = tieRodCount * 2, Unit = "Cái" });
+            }
+            if (sideBraceCount > 0)
+            {
+                items.Add(new MaterialItem { MaterialName = "Chống xiên thành dầm biên", Specification = $"D{p.BeamSideBraceDiameter:F0}×{p.BeamSideBraceThickness:F1} mm", Quantity = sideBraceCount, Unit = "Cây" });
+                items.Add(new MaterialItem { MaterialName = "Bản đế chống xiên dầm", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = sideBraceStations, Unit = "Cái" });
+            }
             if (surfaceTieCount > 0)
             {
                 items.Add(new MaterialItem
@@ -1452,7 +1526,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     Unit = "Cái"
                 });
             }
-            return items;
+            return items.Where(item => item.Quantity > 0).ToList();
         }
 
         private List<MaterialItem> CalculateColumnQuantities(double widthMm, double depthMm, double heightMm,
@@ -1475,9 +1549,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             double exposedRatio = grossPlywoodArea > 1e-9 ? Math.Min(1.0, plywoodArea / grossPlywoodArea) : 1.0;
             double stiffenerLength = Math.Ceiling(stiffenersPerimeter * heightM * exposedRatio * 1.05);
             double tieCount = yokeCount * 2 * Math.Max(1, p.ColumnTieRodCountPerFace);
-            double braceCount = Math.Max(p.ColumnIsBoundaryOrCorner ? 2 : 4, p.ColumnBraceCount);
+            int supportedBraceDirections = Math.Max(0, Math.Min(4,
+                p.ColumnSupportedBraceDirectionCount));
+            // Material quantities must follow the same verified geometry as placement.
+            // A zero-bearing column receives no fictitious push-pull prop quantity; its
+            // missing directions remain in the alternative-restraint takeoff/warning.
+            double braceCount = supportedBraceDirections == 0
+                ? 0
+                : Math.Max(supportedBraceDirections, p.ColumnBraceCount);
             int openDirections = p.ColumnIsBoundaryOrCorner
-                ? Math.Max(1, 4 - Math.Max(0, Math.Min(4, p.ColumnSupportedBraceDirectionCount)))
+                ? Math.Max(1, 4 - supportedBraceDirections)
                 : 0;
             double alternativeRestraintCount = openDirections == 0 ? 0 :
                 Math.Max(3, openDirections * Math.Max(1, Math.Ceiling(braceCount / 4.0)));
@@ -1489,7 +1570,15 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 new MaterialItem { MaterialName = $"Gông cột", Specification = $"{p.ColumnYokeWidth:F0}×{p.ColumnYokeHeight:F0}×{p.ColumnYokeThickness:F1} mm · chân @{p.ColumnYokeBottomSpacing:F0}/trên @{p.ColumnYokeUpperSpacing:F0}", Quantity = yokeCount * Math.Max(1, p.ColumnYokePairCount), Unit = "Bộ" },
                 new MaterialItem { MaterialName = "Ty giằng gông cột", Specification = $"D{p.ColumnTieRodDiameter:F0}", Quantity = tieCount, Unit = "Thanh" },
                 new MaterialItem { MaterialName = "Bát chuồn/đai ốc gông cột", Specification = $"Cho ty D{p.ColumnTieRodDiameter:F0}", Quantity = tieCount * 2, Unit = "Cái" },
-                new MaterialItem { MaterialName = "Chống đẩy-kéo cột", Specification = $"{(p.ColumnIsBoundaryOrCorner ? "cột biên/góc" : "cột giữa")} · cấp tải {p.ColumnBraceAllowableCapacity:F0} kN", Quantity = braceCount, Unit = "Cây" },
+                new MaterialItem
+                {
+                    MaterialName = "Chống đẩy-kéo cột",
+                    Specification = $"D{p.ColumnBraceDiameter:F0}×{p.ColumnBraceThickness:F1} mm · " +
+                                    $"{(p.ColumnIsBoundaryOrCorner ? "cột biên/góc" : "cột giữa")} · " +
+                                    $"cấp tải {p.ColumnBraceAllowableCapacity:F0} kN",
+                    Quantity = braceCount,
+                    Unit = "Cây"
+                },
                 new MaterialItem { MaterialName = "Bản đế chống cột", Specification = $"{p.SupportBasePlateWidth:F0}×{p.SupportBasePlateDepth:F0} mm", Quantity = braceCount, Unit = "Cái" },
                 new MaterialItem { MaterialName = "Cáp giằng cột biên/góc", Specification = $"[T]={p.ColumnCableAllowableCapacity:F0} kN", Quantity = alternativeRestraintCount, Unit = "Sợi" },
                 new MaterialItem { MaterialName = "Tăng đơ cáp cột", Specification = $"[T]={p.ColumnTurnbuckleAllowableCapacity:F0} kN", Quantity = alternativeRestraintCount, Unit = "Cái" },

@@ -23,6 +23,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
         private SharedDataViewModel _sharedViewModel;
         private bool _hasProjectModel;
         private FrameworkElement _nativePreviewControl;
+        private Autodesk.Revit.DB.ElementId _nativePreviewViewId = Autodesk.Revit.DB.ElementId.InvalidElementId;
 
         public FrameworkElement NativePreviewControl
         {
@@ -53,6 +54,14 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
         private bool _renderCancellationRequested;
         public ICommand CancelRenderCommand { get; }
+        public ICommand RenderEditableFamiliesCommand { get; }
+        public ICommand OpenEditableRevitViewCommand { get; }
+
+        public bool IsEditableFamilyPreview => _sharedViewModel?.UseDetailed3DPreview == true;
+        public string AccessoryInteractionText => IsEditableFamilyPreview
+            ? "Phụ kiện đang là FamilyInstance Revit. Khung nhúng chỉ dùng để quan sát; mở view Revit chuyên dụng để chọn và chỉnh sửa."
+            : "Preview nhanh dùng khối nhẹ. Chọn nút bên dưới để dựng phụ kiện Family có thể chỉnh sửa.";
+        public string GroundFloorShoringRuleText => _sharedViewModel?.GroundFloorShoringRuleText ?? string.Empty;
 
         private string _renderSummary = "Đang đọc mô hình kết cấu từ Revit...";
         public string RenderSummary
@@ -103,6 +112,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             _sharedViewModel.SlabSelectionCompleted += OnSlabSelectionCompleted;
             _sharedViewModel.Render3DRequested += OnRender3DRequested;
             CancelRenderCommand = new RelayCommand(_ => CancelRender(), _ => IsRendering);
+            RenderEditableFamiliesCommand = new RelayCommand(_ => RenderEditableFamilies(),
+                _ => !IsRendering && !IsEditableFamilyPreview);
+            OpenEditableRevitViewCommand = new RelayCommand(_ => OpenEditableRevitView(),
+                _ => !IsRendering && IsEditableFamilyPreview &&
+                     _nativePreviewViewId != Autodesk.Revit.DB.ElementId.InvalidElementId);
             
             // The full Revit project is expensive to tessellate. It is generated lazily
             // when the preview tab becomes visible and then reused until the window closes.
@@ -152,6 +166,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             FrameworkElement oldPreview = NativePreviewControl;
             NativePreviewControl = null;
             if (oldPreview is IDisposable nativePreview) nativePreview.Dispose();
+            if (_sharedViewModel.PreservePreviewArtifactsForEditing)
+            {
+                _hasProjectModel = false;
+                return;
+            }
             try
             {
                 NativeRevitFormworkPreviewService.RemovePreviewArtifacts(_sharedViewModel.RevitDoc);
@@ -189,6 +208,24 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             // Avoid rebuilding the complete building for these frequent UI changes.
             if (_sharedViewModel.RevitDoc != null)
             {
+                if (e.PropertyName == nameof(SharedDataViewModel.UseDetailed3DPreview))
+                {
+                    OnPropertyChanged(nameof(IsEditableFamilyPreview));
+                    OnPropertyChanged(nameof(AccessoryInteractionText));
+                    _hasProjectModel = false;
+                    RenderSummary = _sharedViewModel.UseDetailed3DPreview
+                        ? "Đã chuyển sang Family chi tiết; mở lại Preview 3D để dựng đúng hệ phụ kiện."
+                        : "Đã chuyển sang Preview nhanh; mở lại Preview 3D để cập nhật mô hình nhẹ.";
+                    CommandManager.InvalidateRequerySuggested();
+                }
+
+                if (e.PropertyName == nameof(SharedDataViewModel.SelectedScaffoldSystems))
+                {
+                    _hasProjectModel = false;
+                    RenderSummary = "Hệ giàn giáo đã thay đổi; dựng lại Family chi tiết để cập nhật các vùng giàn giáo.";
+                    return;
+                }
+
                 if (e.PropertyName == nameof(SharedDataViewModel.ScheduledDesignRevision) &&
                     _sharedViewModel.ScheduledDesignRevision > 0)
                 {
@@ -203,10 +240,19 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 if (e.PropertyName == nameof(SharedDataViewModel.CurrentComponentType))
                     OnPropertyChanged(nameof(SelectedComponentIndex));
 
-                if (IsColumnPreviewSetting(e.PropertyName))
+                if (e.PropertyName == nameof(SharedDataViewModel.DesignatedGroundLevel) ||
+                    e.PropertyName == nameof(SharedDataViewModel.GroundFloorShoringRuleText) ||
+                    e.PropertyName == nameof(SharedDataViewModel.IsGroundLevel))
+                {
+                    OnPropertyChanged(nameof(GroundFloorShoringRuleText));
+                    _hasProjectModel = false;
+                    RenderSummary = "Tầng trệt đã thay đổi; mở lại Preview 3D để cập nhật phạm vi hệ chống.";
+                }
+
+                if (IsColumnPreviewSetting(e.PropertyName) || IsBeamPreviewSetting(e.PropertyName))
                 {
                     _hasProjectModel = false;
-                    RenderSummary = "Thông số bố trí cột đã thay đổi; mở lại Preview 3D để cập nhật.";
+                    RenderSummary = "Thông số bố trí phụ kiện đã thay đổi; mở lại Preview 3D để cập nhật.";
                 }
                 return;
             }
@@ -248,6 +294,9 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                    propertyName == nameof(SharedDataViewModel.ColumnTieRodCountPerFace) ||
                    propertyName == nameof(SharedDataViewModel.ColumnBraceCount) ||
                    propertyName == nameof(SharedDataViewModel.ColumnBraceAngle) ||
+                   propertyName == nameof(SharedDataViewModel.ColumnBraceDiameter) ||
+                   propertyName == nameof(SharedDataViewModel.ColumnBraceThickness) ||
+                   propertyName == nameof(SharedDataViewModel.ColumnBraceAllowableCapacity) ||
                    propertyName == nameof(SharedDataViewModel.ColumnBracePlacementModeIndex) ||
                    propertyName == nameof(SharedDataViewModel.ColumnNeighbourTieThreshold) ||
                    propertyName == nameof(SharedDataViewModel.ColumnBraceOverrideIndex) ||
@@ -256,6 +305,14 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                    propertyName == nameof(SharedDataViewModel.ColumnWorkPlatformWidth) ||
                    propertyName == nameof(SharedDataViewModel.ColumnGuardrailHeight);
         }
+
+        private static bool IsBeamPreviewSetting(string propertyName) =>
+            propertyName == nameof(SharedDataViewModel.BeamPlacementModeIndex) ||
+            propertyName == nameof(SharedDataViewModel.BeamEdgeSurfaceTieRodDiameter) ||
+            propertyName == nameof(SharedDataViewModel.BeamEdgeSurfaceTieRodSpacing) ||
+            propertyName == nameof(SharedDataViewModel.BeamEdgeSurfaceTieRodAnchorLength) ||
+            propertyName == nameof(SharedDataViewModel.BeamSideBraceSpacing) ||
+            propertyName == nameof(SharedDataViewModel.BeamSideBraceAngle);
 
         public void Generate3DModelAsync()
         {
@@ -294,6 +351,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                             _sharedViewModel.RevitDoc, _sharedViewModel.FloorElements, _sharedViewModel,
                             detailedAccessories, ReportRenderProgress,
                             () => _renderCancellationRequested);
+                        _nativePreviewViewId = result.ViewId;
                         ReportRenderProgress(98, "Đang khởi tạo bộ điều khiển hiển thị Revit...");
                         NativePreviewControl = new PreviewControl(_sharedViewModel.RevitDoc, result.ViewId);
                         RenderSummary = result.Summary;
@@ -333,8 +391,10 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     double propDia = _sharedViewModel.CayChongDiameter > 0 ? _sharedViewModel.CayChongDiameter : 48.0;
                     double propHeight = _sharedViewModel.CayChongHeight > 0 ? _sharedViewModel.CayChongHeight : 3600.0;
                     double propSpace = _sharedViewModel.BeamPropSpacing > 0 ? _sharedViewModel.BeamPropSpacing : 1000.0;
+                    double scaffoldBayWidth = _sharedViewModel.BeamScaffoldBayWidth > 0 ? _sharedViewModel.BeamScaffoldBayWidth : 600.0;
 
-                    newModelGroup = BuildBeam3DModel(beamW, beamD, beamL, sidePly, botPly, sideYoke, botYoke, propSpace, propDia, propHeight, _sharedViewModel.IsGroundLevel);
+                    newModelGroup = BuildBeam3DModel(beamW, beamD, beamL, sidePly, botPly, sideYoke, botYoke,
+                        propSpace, scaffoldBayWidth, propDia, propHeight, _sharedViewModel.IsGroundLevel);
                 }
                 else if (_sharedViewModel.CurrentComponentType == Models.StructuralComponentType.Column)
                 {
@@ -396,6 +456,27 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             _renderCancellationRequested = true;
             RenderProgressText = "Đang hủy an toàn sau bước Revit hiện tại...";
             RenderRemainingText = "Vui lòng chờ transaction hiện tại được hoàn tác.";
+        }
+
+        private void RenderEditableFamilies()
+        {
+            if (IsRendering || IsEditableFamilyPreview) return;
+            ReleaseProjectModel();
+            _sharedViewModel.RequestRender3D();
+            OnPropertyChanged(nameof(IsEditableFamilyPreview));
+            OnPropertyChanged(nameof(AccessoryInteractionText));
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        private void OpenEditableRevitView()
+        {
+            if (IsRendering || !IsEditableFamilyPreview ||
+                _nativePreviewViewId == Autodesk.Revit.DB.ElementId.InvalidElementId) return;
+
+            FrameworkElement oldPreview = NativePreviewControl;
+            NativePreviewControl = null;
+            if (oldPreview is IDisposable preview) preview.Dispose();
+            _sharedViewModel.RequestEditablePreviewInRevit(_nativePreviewViewId);
         }
 
         private void ReportRenderProgress(int percent, string message)
@@ -761,7 +842,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             double beamW, double beamD, double beamL,
             double sidePlyThick, double botPlyThick,
             double sideYokeSpace, double botYokeSpace,
-            double propSpace, double propDia, double propHeight,
+            double propSpace, double scaffoldBayWidth, double propDia, double propHeight,
             bool isGroundLevel)
         {
             var group = new GroupModel3D();
@@ -819,14 +900,38 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             }
             group.Children.Add(new MeshGeometryModel3D { Geometry = yokeBuilder.ToMesh(), Material = yokeMat });
 
+            // D16 through-ties are required for both interior and perimeter beams.
+            // The reference detail uses two levels along the beam side at 1000 mm centres.
+            var throughTieBuilder = new SimpleMeshBuilder();
+            double throughTieSpacing = Math.Max(300.0, _sharedViewModel.BeamTieRodSpacing);
+            double throughTieDiameter = Math.Max(6.0, _sharedViewModel.BeamTieRodDiameter);
+            double throughTieHalfLength = beamW / 2.0 + sidePlyThick + sideYokeH + 45.0;
+            double[] throughTieLevels =
+            {
+                zConcreteBottom + beamD / 3.0,
+                zConcreteBottom + 2.0 * beamD / 3.0
+            };
+            for (double x = throughTieSpacing / 2.0; x < beamL; x += throughTieSpacing)
+            {
+                foreach (double tieZ in throughTieLevels)
+                {
+                    Point3D left = new Point3D(x, -throughTieHalfLength, tieZ);
+                    Point3D right = new Point3D(x, throughTieHalfLength, tieZ);
+                    throughTieBuilder.AddCylinder(left, right, throughTieDiameter, 8);
+                    throughTieBuilder.AddBox(left, 65.0, 10.0, 65.0);
+                    throughTieBuilder.AddBox(right, 65.0, 10.0, 65.0);
+                }
+            }
+            group.Children.Add(new MeshGeometryModel3D { Geometry = throughTieBuilder.ToMesh(), Material = steelMat });
+
             // Standalone beam preview: surface-fixed rods are shown only when the
             // selected arrangement is explicitly a perimeter beam (mode 2).
             if (_sharedViewModel.BeamPlacementModeIndex == 2)
             {
                 var surfaceTieBuilder = new SimpleMeshBuilder();
-                const double surfaceTieSpacing = 1000.0;
-                const double surfaceTieLength = 1200.0;
-                const double surfaceTieDiameter = 12.0;
+                double surfaceTieSpacing = Math.Max(300.0, _sharedViewModel.BeamEdgeSurfaceTieRodSpacing);
+                double surfaceTieLength = Math.Max(500.0, _sharedViewModel.BeamEdgeSurfaceTieRodAnchorLength);
+                double surfaceTieDiameter = Math.Max(6.0, _sharedViewModel.BeamEdgeSurfaceTieRodDiameter);
                 double rodZ = zConcreteBottom + beamD + surfaceTieDiameter / 2.0 + 8.0;
                 for (double x = surfaceTieSpacing / 2.0; x < beamL; x += surfaceTieSpacing)
                 {
@@ -837,6 +942,28 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                     surfaceTieBuilder.AddBox(outside, 70.0, 12.0, 12.0);
                 }
                 group.Children.Add(new MeshGeometryModel3D { Geometry = surfaceTieBuilder.ToMesh(), Material = steelMat });
+
+                // With no project geometry in this standalone preview, -Y is the
+                // declared exterior side. Render one cylindrical brace per station;
+                // never mirror it onto the slab/interior side.
+                var sideBraceBuilder = new SimpleMeshBuilder();
+                double braceSpacing = Math.Max(300.0, _sharedViewModel.BeamSideBraceSpacing);
+                double braceDiameter = Math.Max(20.0, _sharedViewModel.BeamSideBraceDiameter);
+                double braceAngleRad = Math.Max(30.0, Math.Min(75.0, _sharedViewModel.BeamSideBraceAngle)) * Math.PI / 180.0;
+                double braceTopZ = zConcreteBottom + Math.Max(beamD * 0.55, 150.0);
+                double braceRise = Math.Max(100.0, braceTopZ - zJackBottom - 20.0);
+                double braceRun = braceRise / Math.Tan(braceAngleRad);
+                double braceTopY = -beamW / 2.0 - sidePlyThick - sideYokeH;
+                double braceFootY = braceTopY - braceRun;
+                for (double x = braceSpacing / 2.0; x < beamL; x += braceSpacing)
+                {
+                    sideBraceBuilder.AddCylinder(
+                        new Point3D(x, braceFootY, zJackBottom + 20.0),
+                        new Point3D(x, braceTopY, braceTopZ),
+                        braceDiameter,
+                        12);
+                }
+                group.Children.Add(new MeshGeometryModel3D { Geometry = sideBraceBuilder.ToMesh(), Material = steelMat });
             }
 
             // 4. Props
@@ -847,15 +974,19 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
                 for (double x = propDia / 2; x <= beamL; x += propSpace)
                 {
-                    jackBuilder.AddBox(new Point3D(x, 0, zJackBottom + 5), 150, 150, 10);
-                    jackBuilder.AddCylinder(new Point3D(x, 0, zJackBottom + 10), new Point3D(x, 0, zShoreBottom), 38, 12);
-                    
-                    shoreBuilder.AddCylinder(new Point3D(x, 0, zShoreBottom), new Point3D(x, 0, zShoreTop), propDia, 16);
-                    
-                    jackBuilder.AddCylinder(new Point3D(x, 0, zShoreTop), new Point3D(x, 0, zBotYokeBottom - 5), 38, 12);
-                    jackBuilder.AddBox(new Point3D(x, 0, zBotYokeBottom - 5), botYokeW + 10, botYokeW + 10, 10);
-                    jackBuilder.AddBox(new Point3D(x, botYokeW / 2 + 5, zBotYokeBottom + 50), botYokeW + 10, 10, 100);
-                    jackBuilder.AddBox(new Point3D(x, -botYokeW / 2 - 5, zBotYokeBottom + 50), botYokeW + 10, 10, 100);
+                    foreach (double rowSign in new[] { -1.0, 1.0 })
+                    {
+                        double y = rowSign * scaffoldBayWidth / 2.0;
+                        jackBuilder.AddBox(new Point3D(x, y, zJackBottom + 5), 150, 150, 10);
+                        jackBuilder.AddCylinder(new Point3D(x, y, zJackBottom + 10), new Point3D(x, y, zShoreBottom), 38, 12);
+
+                        shoreBuilder.AddCylinder(new Point3D(x, y, zShoreBottom), new Point3D(x, y, zShoreTop), propDia, 16);
+
+                        jackBuilder.AddCylinder(new Point3D(x, y, zShoreTop), new Point3D(x, y, zBotYokeBottom - 5), 38, 12);
+                        jackBuilder.AddBox(new Point3D(x, y, zBotYokeBottom - 5), botYokeW + 10, botYokeW + 10, 10);
+                        jackBuilder.AddBox(new Point3D(x, y + botYokeW / 2 + 5, zBotYokeBottom + 50), botYokeW + 10, 10, 100);
+                        jackBuilder.AddBox(new Point3D(x, y - botYokeW / 2 - 5, zBotYokeBottom + 50), botYokeW + 10, 10, 100);
+                    }
                 }
                 
                 group.Children.Add(new MeshGeometryModel3D { Geometry = shoreBuilder.ToMesh(), Material = steelMat });
@@ -973,11 +1104,36 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
                 ? openBracePoints
                 : new[] { openBracePoints[1], openBracePoints[2], openBracePoints[3] };
             int braces = Math.Min(bracePoints.Length, Math.Max(2, Math.Min(4, _sharedViewModel.ColumnBraceCount)));
+            NativeAccessoryFamilyDimensionPolicy.PushPullProfile profile =
+                NativeAccessoryFamilyDimensionPolicy.GetPushPullProfile(
+                    _sharedViewModel.ColumnBraceAllowableCapacity,
+                    _sharedViewModel.ColumnBraceDiameter,
+                    _sharedViewModel.ColumnBraceThickness);
+            double outerDiameter = profile.OuterDiameterMm;
+            double wallThickness = profile.WallThicknessMm;
+            double innerDiameter = profile.InnerStageDiameterMm;
+            double sleeveDiameter = profile.SleeveDiameterMm;
+            double collarDiameter = profile.CollarDiameterMm;
             for (int i = 0; i < braces; i++)
             {
                 var member = bracePoints[i];
-                braceBuilder.AddCylinder(member.Item2, member.Item1, 42, 10);
-                braceBuilder.AddBox(member.Item2, 180, 140, 12);
+                Vector3D axis = member.Item1 - member.Item2;
+                braceBuilder.AddCylinder(member.Item2, member.Item2 + axis * 0.57,
+                    outerDiameter, 10);
+                braceBuilder.AddCylinder(member.Item2 + axis * 0.43, member.Item1,
+                    innerDiameter, 10);
+                braceBuilder.AddCylinder(member.Item2 + axis * 0.44,
+                    member.Item2 + axis * 0.56, sleeveDiameter, 10);
+                braceBuilder.AddCylinder(member.Item2 + axis * 0.42,
+                    member.Item2 + axis * 0.44, collarDiameter, 10);
+                braceBuilder.AddCylinder(member.Item2 + axis * 0.56,
+                    member.Item2 + axis * 0.58, collarDiameter, 10);
+                double plateWidth = Math.Max(profile.PlateSizeMm,
+                    _sharedViewModel.SupportBasePlateWidth);
+                double plateDepth = Math.Max(profile.PlateSizeMm,
+                    _sharedViewModel.SupportBasePlateDepth);
+                braceBuilder.AddBox(member.Item2, plateWidth, plateDepth,
+                    Math.Max(8.0, wallThickness * 2.0));
             }
             if (_sharedViewModel.ColumnIsBoundaryOrCorner)
             {

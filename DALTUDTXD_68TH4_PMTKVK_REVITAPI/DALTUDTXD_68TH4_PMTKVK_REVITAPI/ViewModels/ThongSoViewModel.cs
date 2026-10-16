@@ -1,10 +1,13 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Input;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models;
 using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Views;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 {
@@ -27,6 +30,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
             SaveSettingsCommand = new RelayCommand(o => ExecuteSaveSettings());
             ResetSettingsCommand = new RelayCommand(o => ExecuteResetSettings());
+            SelectScaffoldSystemsCommand = new RelayCommand(ExecuteSelectScaffoldSystems);
             ChangeTabCommand = new RelayCommand(ExecuteChangeTab);
             
             RevitVersionStatus = "Revit API - Cấu hình hệ số thiết kế";
@@ -229,6 +233,24 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
             set { _SharedDataViewModel.SupportSpacing = value; OnPropertyChanged(); }
         }
 
+        public ScaffoldSystemType SelectedScaffoldSystems => _SharedDataViewModel.SelectedScaffoldSystems;
+        public bool UseFrameScaffold
+        {
+            get => _SharedDataViewModel.UseFrameScaffold;
+            set => _SharedDataViewModel.UseFrameScaffold = value;
+        }
+        public bool UseWedgeScaffold
+        {
+            get => _SharedDataViewModel.UseWedgeScaffold;
+            set => _SharedDataViewModel.UseWedgeScaffold = value;
+        }
+        public bool UseRinglockScaffold
+        {
+            get => _SharedDataViewModel.UseRinglockScaffold;
+            set => _SharedDataViewModel.UseRinglockScaffold = value;
+        }
+        public string SelectedScaffoldSystemsSummary => _SharedDataViewModel.SelectedScaffoldSystemsSummary;
+
         public string RevitVersionStatus
         {
             get => _revitVersionStatus;
@@ -237,19 +259,49 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels
 
         public ICommand SaveSettingsCommand { get; }
         public ICommand ResetSettingsCommand { get; }
+        public ICommand SelectScaffoldSystemsCommand { get; }
         public ICommand ChangeTabCommand { get; }
 
         private void ExecuteSaveSettings()
         {
-            _dialogService.ShowInfo("Đã áp dụng các hệ số an toàn và tải trọng thiết kế thành công!\nCác thông số này sẽ được áp dụng trực tiếp vào mô hình phân tích.", "Cấu hình thiết kế");
+            if (!ScaffoldSystemPreferenceStore.TrySave(_SharedDataViewModel.SelectedScaffoldSystems, out string error))
+            {
+                _dialogService.ShowWarning("Các thông số đã được áp dụng cho phiên làm việc hiện tại, nhưng không thể lưu lựa chọn hệ giàn giáo cho lần mở sau.\n\n" + error,
+                    "Cấu hình thiết kế");
+                return;
+            }
+            _dialogService.ShowInfo("Đã áp dụng cấu hình thiết kế.\nHệ giàn giáo: " +
+                                    _SharedDataViewModel.SelectedScaffoldSystemsSummary +
+                                    "\nLựa chọn này được lưu cho lần mở phần mềm sau.", "Cấu hình thiết kế");
             RevitVersionStatus = "Đã áp dụng cấu hình thiết kế lúc " + DateTime.Now.ToString("HH:mm:ss");
         }
 
         private void ExecuteResetSettings()
         {
             ResetToDefaults();
-            _dialogService.ShowInfo("Đã khôi phục toàn bộ thông số thiết kế về giá trị mặc định của TCVN 10307:2014.", "Cấu hình thiết kế");
+            bool saved = ScaffoldSystemPreferenceStore.TrySave(_SharedDataViewModel.SelectedScaffoldSystems,
+                out string error);
+            string persistenceNote = saved
+                ? "\nHệ giàn giáo mặc định: Ringlock."
+                : "\nKhông thể lưu lựa chọn mặc định cho lần mở sau: " + error;
+            _dialogService.ShowInfo("Đã khôi phục toàn bộ thông số thiết kế về giá trị mặc định của TCVN 10307:2014." +
+                                    persistenceNote, "Cấu hình thiết kế");
             RevitVersionStatus = "Đã đặt lại cấu hình mặc định lúc " + DateTime.Now.ToString("HH:mm:ss");
+        }
+
+        private void ExecuteSelectScaffoldSystems(object parameter)
+        {
+            var window = new ScaffoldSystemSelectionWindow(_SharedDataViewModel.SelectedScaffoldSystems);
+            if (parameter is Window owner && owner.IsVisible) window.Owner = owner;
+            if (window.ShowDialog() != true) return;
+
+            _SharedDataViewModel.SelectedScaffoldSystems = window.SelectedSystems;
+            if (!ScaffoldSystemPreferenceStore.TrySave(window.SelectedSystems, out string error))
+            {
+                _dialogService.ShowWarning("Đã áp dụng lựa chọn cho phiên làm việc hiện tại nhưng không thể lưu cho lần mở sau.\n\n" + error,
+                    "Chọn hệ giàn giáo");
+            }
+            RevitVersionStatus = "Hệ giàn giáo: " + _SharedDataViewModel.SelectedScaffoldSystemsSummary;
         }
 
         private void ResetToDefaults()

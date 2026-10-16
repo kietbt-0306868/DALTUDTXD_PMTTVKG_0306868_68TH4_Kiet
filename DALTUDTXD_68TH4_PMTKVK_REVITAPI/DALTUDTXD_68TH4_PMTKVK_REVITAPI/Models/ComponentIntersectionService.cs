@@ -15,6 +15,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             public FloorElementModel Model { get; set; }
             public Element Element { get; set; }
             public BoundingBoxXYZ Box { get; set; }
+            public List<PlanarFace> TopFaces { get; set; } = new List<PlanarFace>();
         }
 
         public static Dictionary<string, ComponentIntersectionInfo> Analyze(
@@ -28,7 +29,15 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                 .Select(model =>
                 {
                     Element element = document.GetElement(model.UniqueId);
-                    return new Node { Model = model, Element = element, Box = element?.get_BoundingBox(null) };
+                    return new Node
+                    {
+                        Model = model,
+                        Element = element,
+                        Box = element?.get_BoundingBox(null),
+                        TopFaces = model.ComponentType == StructuralComponentType.Slab
+                            ? GetPlanarFaces(element).Where(face => face.FaceNormal.Z > 0.70).ToList()
+                            : new List<PlanarFace>()
+                    };
                 })
                 .Where(node => node.Element != null && node.Box != null)
                 .GroupBy(node => node.Model.UniqueId, StringComparer.OrdinalIgnoreCase)
@@ -125,27 +134,36 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             if (curveLengthFt < 1e-9) return;
             axis = axis.Normalize();
             XYZ cross = new XYZ(-axis.Y, axis.X, 0).Normalize();
-            XYZ midpoint = (start + end) * 0.5;
             double probeFt = (Math.Max(100.0, beam.Model.Elevation) / 2.0 + 250.0) / MmPerFoot;
-            XYZ plusProbe = midpoint + cross * probeFt;
-            XYZ minusProbe = midpoint - cross * probeFt;
             List<Node> supportingSlabs = neighbours
                 .Where(item => item.Model.ComponentType == StructuralComponentType.Slab &&
                                Math.Abs(item.Box.Max.Z - beam.Box.Max.Z) * MmPerFoot <= 300.0)
                 .ToList();
             if (supportingSlabs.Count > 0)
             {
-                double toleranceFt = 50.0 / MmPerFoot;
-                bool plusHasSlab = supportingSlabs.Any(slab =>
-                    plusProbe.X >= slab.Box.Min.X - toleranceFt && plusProbe.X <= slab.Box.Max.X + toleranceFt &&
-                    plusProbe.Y >= slab.Box.Min.Y - toleranceFt && plusProbe.Y <= slab.Box.Max.Y + toleranceFt);
-                bool minusHasSlab = supportingSlabs.Any(slab =>
-                    minusProbe.X >= slab.Box.Min.X - toleranceFt && minusProbe.X <= slab.Box.Max.X + toleranceFt &&
-                    minusProbe.Y >= slab.Box.Min.Y - toleranceFt && minusProbe.Y <= slab.Box.Max.Y + toleranceFt);
-                if (plusHasSlab || minusHasSlab)
+                int plusOnly = 0;
+                int minusOnly = 0;
+                int bothSides = 0;
+                foreach (double ratio in new[] { 0.10, 0.30, 0.50, 0.70, 0.90 })
+                {
+                    XYZ station = location.Curve.Evaluate(ratio, true);
+                    XYZ plusProbe = station + cross * probeFt;
+                    XYZ minusProbe = station - cross * probeFt;
+                    bool plusHasSlab = supportingSlabs.Any(slab =>
+                        IsPointOnSlabTop(slab, plusProbe, beam.Box.Max.Z));
+                    bool minusHasSlab = supportingSlabs.Any(slab =>
+                        IsPointOnSlabTop(slab, minusProbe, beam.Box.Max.Z));
+                    if (plusHasSlab && minusHasSlab) bothSides++;
+                    else if (plusHasSlab) plusOnly++;
+                    else if (minusHasSlab) minusOnly++;
+                }
+                if (plusOnly + minusOnly + bothSides > 0)
                 {
                     info.HasBeamSideClassification = true;
-                    info.IsPerimeterBeam = plusHasSlab != minusHasSlab;
+                    info.IsPerimeterBeam = plusOnly + minusOnly > 0;
+                    info.BeamInteriorSideSign = info.IsPerimeterBeam
+                        ? (plusOnly >= minusOnly ? 1 : -1)
+                        : 0;
                 }
             }
             double modelLengthMm = Math.Max(1, beam.Model.StoryHeight);
@@ -250,6 +268,61 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                 reductions[positiveIndex] = Math.Max(reductions[positiveIndex], reductionMm);
             if (reachesNegative)
                 reductions[negativeIndex] = Math.Max(reductions[negativeIndex], reductionMm);
+        }
+
+        private static bool IsPointOnSlabTop(Node slab, XYZ point, double expectedTopZ)
+        {
+            foreach (PlanarFace face in slab.TopFaces)
+            {
+                try
+                {
+                    IntersectionResult projection = face.Project(point);
+                    if (projection == null || !face.IsInside(projection.UVPoint)) continue;
+                    if (Math.Abs(projection.XYZPoint.Z - expectedTopZ) * MmPerFoot <= 300.0)
+                        return true;
+                }
+                catch (Autodesk.Revit.Exceptions.ApplicationException)
+                {
+                    // Ignore malformed/imported faces and continue with another face.
+                }
+            }
+            return false;
+        }
+
+        private static IEnumerable<PlanarFace> GetPlanarFaces(Element element)
+        {
+            if (element == null) return Enumerable.Empty<PlanarFace>();
+            try
+            {
+                GeometryElement geometry = element.get_Geometry(new Options
+                {
+                    DetailLevel = ViewDetailLevel.Medium,
+                    IncludeNonVisibleObjects = false,
+                    ComputeReferences = false
+                });
+                return geometry == null
+                    ? Enumerable.Empty<PlanarFace>()
+                    : GetSolids(geometry, Transform.Identity)
+                        .SelectMany(solid => solid.Faces.Cast<Face>())
+                        .OfType<PlanarFace>().ToList();
+            }
+            catch (Autodesk.Revit.Exceptions.ApplicationException)
+            {
+                return Enumerable.Empty<PlanarFace>();
+            }
+        }
+
+        private static IEnumerable<Solid> GetSolids(GeometryElement geometry, Transform transform)
+        {
+            foreach (GeometryObject item in geometry)
+            {
+                if (item is Solid solid && solid.Faces.Size > 0 && solid.Volume > 1e-9)
+                    yield return transform.IsIdentity ? solid : SolidUtils.CreateTransformed(solid, transform);
+                else if (item is GeometryInstance instance)
+                    foreach (Solid child in GetSolids(instance.GetSymbolGeometry(),
+                                 transform.Multiply(instance.Transform)))
+                        yield return child;
+            }
         }
 
         private static double ProjectedHalfExtent(BoundingBoxXYZ box, XYZ center, XYZ axis)

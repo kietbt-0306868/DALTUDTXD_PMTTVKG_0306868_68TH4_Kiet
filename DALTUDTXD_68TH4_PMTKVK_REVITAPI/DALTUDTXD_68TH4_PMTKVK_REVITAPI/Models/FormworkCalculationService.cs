@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DALTUDTXD_68TH4_PMTKVK_REVITAPI.Services;
 using DALTUDTXD_68TH4_PMTKVK_REVITAPI.ViewModels;
 
 namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
@@ -57,7 +58,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public double SupportHeadBearingAllowable { get; set; } = 8.0;
         public double SupportJackExtension { get; set; } = 300.0;
         public double SupportJackExtensionLimit { get; set; } = 600.0;
-        
+        public ScaffoldSystemType SelectedScaffoldSystems { get; set; } = ScaffoldSystemType.Ringlock;
+
         public int SoNhipVanMat { get; set; } = 2;
         public int SoNhipXaGoPhu { get; set; } = 3;
         public int SoNhipXaGoChinh { get; set; } = 3;
@@ -98,16 +100,16 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public double BeamPrimaryWalerWidth { get; set; } = 50.0;
         public double BeamPrimaryWalerDepth { get; set; } = 100.0;
         public double BeamPrimaryWalerSpacing { get; set; } = 1200.0;
-        public double BeamScaffoldBayWidth { get; set; } = 1200.0;
+        public double BeamScaffoldBayWidth { get; set; } = 600.0;
         public double BeamTieRodDiameter { get; set; } = 16.0;
-        public double BeamTieRodSpacing { get; set; } = 1200.0;
+        public double BeamTieRodSpacing { get; set; } = 1000.0;
         public double BeamTieRodAllowableCapacity { get; set; } = 20.0;
         // Fixed rods laid across the slab surface are a perimeter-beam accessory.
         public double BeamEdgeSurfaceTieRodDiameter { get; set; } = 12.0;
         public double BeamEdgeSurfaceTieRodSpacing { get; set; } = 1000.0;
         public double BeamEdgeSurfaceTieRodAnchorLength { get; set; } = 1200.0;
         public double BeamEdgeSurfaceTieRodAllowableCapacity { get; set; } = 12.0;
-        public double BeamSideBraceSpacing { get; set; } = 1200.0;
+        public double BeamSideBraceSpacing { get; set; } = 1000.0;
         public double BeamSideBraceAngle { get; set; } = 55.0;
         public double BeamSideBraceDiameter { get; set; } = 48.0;
         public double BeamSideBraceThickness { get; set; } = 2.0;
@@ -145,6 +147,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
         public int ColumnBraceCount { get; set; } = 4;
         public int ColumnSupportedBraceDirectionCount { get; set; } = 4;
         public double ColumnBraceAngle { get; set; } = 55.0;
+        public double ColumnBraceDiameter { get; set; } = 48.0;
+        public double ColumnBraceThickness { get; set; } = 2.0;
         public double ColumnBraceAllowableCapacity { get; set; } = 15.0;
         // 0: open site; 1: keep feet inside the overall structural footprint;
         // 2: strict middle-plot mode, keep feet on the supporting floor footprint.
@@ -406,12 +410,36 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                    res.SupportHeadBearing.IsOk && res.SupportJack.IsOk;
         }
 
-        private static void AddVerticalSupportReportItems(
-            CalculationResult res, string prefix, bool isSelected, bool includeGroundBearing)
+        private static bool UsesMultipleScaffoldSystems(CalculationParameters p)
         {
-            res.ReportItems.Add(BuildReportItem(prefix, "Chống đứng: nén dọc trục", res.Support.StressResult, isSelected));
-            res.ReportItems.Add(BuildReportItem(prefix, "Chống đứng: độ mảnh", res.SupportSlenderness.StressResult, isSelected));
-            res.ReportItems.Add(BuildReportItem(prefix, "Chống đứng: ổn định Euler", res.SupportEulerBuckling.StressResult, isSelected));
+            ScaffoldSystemType systems = p.SelectedScaffoldSystems.Normalize();
+            return systems != ScaffoldSystemType.Frame &&
+                   systems != ScaffoldSystemType.Wedge &&
+                   systems != ScaffoldSystemType.Ringlock;
+        }
+
+        private static string ScaffoldSupportName(CalculationParameters p, string scope)
+        {
+            string name = $"{p.SelectedScaffoldSystems.ToDisplayText()} · chống đứng {scope}";
+            return UsesMultipleScaffoldSystems(p)
+                ? name + " (phân vùng; [P] phải xác nhận theo catalogue nhà sản xuất)"
+                : name;
+        }
+
+        private static string ScaffoldManufacturerNote(CalculationParameters p) =>
+            UsesMultipleScaffoldSystems(p)
+                ? " Nhiều hệ được bố trí theo vùng độc lập; sức chịu tải, tổ hợp module và " +
+                  "liên kết tại ranh chuyển tiếp phải được xác nhận theo catalogue nhà sản xuất."
+                : string.Empty;
+
+        private static void AddVerticalSupportReportItems(
+            CalculationResult res, string prefix, bool isSelected, bool includeGroundBearing,
+            CalculationParameters parameters)
+        {
+            string system = parameters.SelectedScaffoldSystems.ToDisplayText();
+            res.ReportItems.Add(BuildReportItem(prefix, $"{system}: nén dọc trục", res.Support.StressResult, isSelected));
+            res.ReportItems.Add(BuildReportItem(prefix, $"{system}: độ mảnh", res.SupportSlenderness.StressResult, isSelected));
+            res.ReportItems.Add(BuildReportItem(prefix, $"{system}: ổn định Euler", res.SupportEulerBuckling.StressResult, isSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Bản đế: ép mặt cục bộ", res.SupportBaseBearing.StressResult, isSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Đầu U/bản đầu: ép mặt", res.SupportHeadBearing.StressResult, isSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Kích điều chỉnh: độ vươn", res.SupportJack.StressResult, isSelected));
@@ -428,7 +456,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             var vanMat = new CauKienModel("Ván mặt", LoaiTietDien.VanMat, "Gỗ dán", 1000, p.VanMatThickness, p.VanMatThickness);
             var xaGoPhu = new CauKienModel("Xà gồ phụ", LoaiTietDien.XaGo, "Gỗ", p.XaGoPhuWidth, p.XaGoPhuHeight);
             var xaGoChinh = new CauKienModel("Xà gồ chính", LoaiTietDien.XaGo, "Gỗ", p.XaGoChinhWidth, p.XaGoChinhHeight);
-            var cayChong = new CauKienModel("Cây chống", LoaiTietDien.CayChong, "Thép", p.CayChongDiameter, p.CayChongDiameter, p.CayChongThickness);
+            var cayChong = new CauKienModel("Chống đứng hệ giàn giáo", LoaiTietDien.CayChong, "Thép", p.CayChongDiameter, p.CayChongDiameter, p.CayChongThickness);
 
             // Tải trọng
             double q_bt = (p.ConcreteWeight + p.SteelWeight) * (p.SlabThickness / 1000.0) * p.DeadLoadSafetyFactor; 
@@ -495,7 +523,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             // 4. Cây chống
             double N_tt = q_tt * (p.Joist2Spacing / 1000.0) * (p.SupportSpacing / 1000.0); 
             
-            CheckVerticalSupport(res, p, cayChong, N_tt, p.IsGroundLevel, "Cây chống đứng sàn");
+            CheckVerticalSupport(res, p, cayChong, N_tt, p.IsGroundLevel,
+                ScaffoldSupportName(p, "sàn"));
 
             // Xây dựng List báo cáo cho SharedDataViewModel
             if (!p.IsGroundLevel)
@@ -508,7 +537,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                 res.ReportItems.Add(BuildReportItem(prefix, "Kiểm tra cường độ xà gồ chính (Thanh chính)", res.Joist2.StressResult, p.IsFloorSelected));
                 res.ReportItems.Add(BuildReportItem(prefix, "Kiểm tra cắt xà gồ chính (τ ≤ [τ])", res.Joist2.ShearResult, p.IsFloorSelected));
                 res.ReportItems.Add(BuildReportItem(prefix, "Kiểm tra độ võng xà gồ chính", res.Joist2.DeflectionResult, p.IsFloorSelected));
-                AddVerticalSupportReportItems(res, prefix, p.IsFloorSelected, false);
+                AddVerticalSupportReportItems(res, prefix, p.IsFloorSelected, false, p);
             }
             else
             {
@@ -530,16 +559,17 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
 
         public static CalculationResult CheckBeamSafety(CalculationParameters p)
         {
+            NormalizeBeamPushPullProfile(p);
             var res = new CalculationResult();
             var sidePlywood = new CauKienModel("Ván thành dầm", LoaiTietDien.VanMat, "Gỗ dán phủ phim", 1000, p.BeamSidePlywoodThickness, p.BeamSidePlywoodThickness);
             var bottomPlywood = new CauKienModel("Ván đáy dầm", LoaiTietDien.VanMat, "Gỗ dán phủ phim", 1000, p.BeamBottomPlywoodThickness, p.BeamBottomPlywoodThickness);
             var sideYoke = new CauKienModel("Gông/nẹp thành dầm", LoaiTietDien.XaGo, "Gỗ", p.BeamPrimaryWalerWidth, p.BeamPrimaryWalerDepth);
             var secondaryJoist = new CauKienModel("Xà gồ phụ đáy dầm", LoaiTietDien.XaGo, "Gỗ", p.BeamSecondaryJoistWidth, p.BeamSecondaryJoistDepth);
             var primaryWaler = new CauKienModel("Xà gồ chính trên đầu U", LoaiTietDien.XaGo, "Gỗ", p.BeamPrimaryWalerWidth, p.BeamPrimaryWalerDepth);
-            var prop = new CauKienModel("Cây chống", LoaiTietDien.CayChong, "Thép", p.CayChongDiameter, p.CayChongDiameter, p.CayChongThickness);
+            var prop = new CauKienModel("Chống đứng hệ giàn giáo", LoaiTietDien.CayChong, "Thép", p.CayChongDiameter, p.CayChongDiameter, p.CayChongThickness);
 
             // Chuỗi truyền tải trọng theo video: ván phủ phim → xà gồ phụ 50×50 @200
-            // → xà gồ chính 50×100 → đầu U/Ringlock → bản đế/tấm kê.
+            // → xà gồ chính 50×100 → đầu U/hệ giàn giáo đã chọn → bản đế/tấm kê.
             double q_bt_bottom = (p.ConcreteWeight + p.SteelWeight) * (p.BeamDepth / 1000.0) * p.DeadLoadSafetyFactor;
             double q_vk_bottom = p.WoodFormworkWeight * p.DeadLoadSafetyFactor;
             double q_ll_bottom = (p.ConstructionLiveLoad + Math.Max(p.PouringImpactLoad, p.VibrationLoad)) * p.LiveLoadSafetyFactor;
@@ -566,7 +596,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.BeamClampStationCount = clampStations.Count;
             res.BeamClampLayoutText = string.Join(" - ", clampStations.ConvertAll(x => x.ToString("F0")));
             double primarySpacing = Math.Max(100.0, p.BeamPrimaryWalerSpacing);
-            double scaffoldBay = Math.Max(100.0, p.BeamScaffoldBayWidth);
+            // Keep the verification span identical to every renderer. Invalid legacy
+            // values fall back to the 600 mm beam tower; 300 mm is the supported minimum.
+            double scaffoldBay = IsFinitePositive(p.BeamScaffoldBayWidth)
+                ? Math.Max(300.0, p.BeamScaffoldBayWidth)
+                : 600.0;
             double mDivPlywood = GetMomentDivisor(p.SoNhipVanMat);
             double shearCoeffPlywood = GetShearCoefficient(p.SoNhipVanMat);
             double plyLimit = p.PlywoodBendingStrength * p.MoistureFactor * p.TemperatureFactor;
@@ -594,7 +628,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.BeamSecondaryJoist.DeflectionResult = new KetQuaTinhToan("Xà gồ phụ đáy dầm", "Độ võng", LoaiKiemTra.DoVong, "f=5q_sL⁴/(384EI) ≤ L/400", fSecondary, primarySpacing * p.JoistDeflectionLimitRatio, "mm");
 
             // Xà gồ chính đặt ngang dưới dầm: tải dầm tập trung trong bề rộng dầm, không trải đều
-            // trên toàn nhịp Ringlock. Dùng tải tập trung giữa nhịp là trường hợp bảo thủ.
+            // trên toàn nhịp hệ giàn giáo. Dùng tải tập trung giữa nhịp là trường hợp bảo thủ.
             double P_primary_tt = q_tt_bottom * width_m * primarySpacing / 1000.0;
             double P_primary_tc = q_tc_bottom * width_m * primarySpacing / 1000.0;
             double M_primary = P_primary_tt * 1000.0 * scaffoldBay / 4.0;
@@ -630,7 +664,8 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             double fYokeSide = 5.0 * q_yoke_side_tc * Math.Pow(p.BeamDepth, 4) / (384.0 * p.ElasticModulus * sideYoke.MomenQuanTinh_I);
             res.BeamSideYoke.DeflectionResult = new KetQuaTinhToan("Gông/nẹp thành dầm", "Độ võng", LoaiKiemTra.DoVong, "f=5q_sL⁴/(384EI) ≤ L/400", fYokeSide, p.BeamDepth * p.JoistDeflectionLimitRatio, "mm");
 
-            // Tổng lực ngang trên một mét dài dầm; ty D16 và chống xiên là hai phương án giữ thành.
+            // Tổng lực ngang trên một mét dài dầm. Ty xuyên D16 giữ cặp nẹp của
+            // mọi dầm; dầm biên còn phải có chống xiên và ty chết trên mặt sàn.
             double beamDepthM = Math.Max(0.05, p.BeamDepth / 1000.0);
             double horizontalResultant = 0.5 * p.ConcreteWeight * p.DeadLoadSafetyFactor * beamDepthM * beamDepthM +
                                          p.VibrationLoad * p.LiveLoadSafetyFactor * beamDepthM;
@@ -662,10 +697,11 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.BeamSideBrace.StressResult = new KetQuaTinhToan(beamBraceName, "Lực dọc mỗi chống", LoaiKiemTra.ChiuLucDoc,
                 "N=H_d·s_chống/(n·cosα) ≤ [N]", braceDemand, Math.Max(0.1, p.BeamSideBraceAllowableCapacity), "kN");
 
-            // Phản lực tại một đầu U/Ringlock theo diện tích ảnh hưởng của một nút khung.
+            // Phản lực tại một đầu U/nút giàn giáo theo diện tích ảnh hưởng của một nút khung.
             double N_tt = 0.5 * P_primary_tt;
             res.BeamSupportReaction = N_tt;
-            CheckVerticalSupport(res, p, prop, N_tt, p.IsGroundLevel, "Cây chống đứng dầm");
+            CheckVerticalSupport(res, p, prop, N_tt, p.IsGroundLevel,
+                ScaffoldSupportName(p, "dầm"));
 
             // Kiểm tra điều kiện công nghệ được nêu trong video. Đây là điều kiện nghiệm thu,
             // không thay thế kết quả thí nghiệm cường độ bê tông tại công trường.
@@ -673,7 +709,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.BeamStripping.StressResult = new KetQuaTinhToan("Tháo cốp pha dầm/sàn", "Ngưỡng cường độ bê tông", LoaiKiemTra.Khac, "70%/β_tháo ≤ 1,00 (chỉ tháo khi có kết quả nghiệm thu)", strippingRatio, 1.0, "-");
             double overlapDeviation = Math.Max(0.0, Math.Max(50.0 - p.BeamVibratorOverlap, p.BeamVibratorOverlap - 100.0));
             res.BeamVibrationProcedure.StressResult = new KetQuaTinhToan("Đầm dùi bê tông", "Độ chồng vùng đầm", LoaiKiemTra.Khac, "1+max(50-a; a-100; 0) ≤ 1", 1.0 + overlapDeviation, 1.0, "-");
-            res.BeamLoadPathText = $"Ván phủ phim → {res.BeamBottomPanelStiffenerCount} xà gồ phụ {p.BeamSecondaryJoistWidth:F0}×{p.BeamSecondaryJoistDepth:F0} đáy @≤{secondarySpacing:F0} → xà gồ chính {p.BeamPrimaryWalerWidth:F0}×{p.BeamPrimaryWalerDepth:F0} @ {primarySpacing:F0} → đầu U/Ringlock {scaffoldBay:F0} → bản đế/tấm kê; thành dầm {res.BeamSidePanelStiffenerCount} nẹp @≤{sideSpacing:F0}; {res.BeamClampStationCount} vị trí gông tại [{res.BeamClampLayoutText}] mm";
+            res.BeamLoadPathText = $"Ván phủ phim → {res.BeamBottomPanelStiffenerCount} xà gồ phụ {p.BeamSecondaryJoistWidth:F0}×{p.BeamSecondaryJoistDepth:F0} đáy @≤{secondarySpacing:F0} → xà gồ chính {p.BeamPrimaryWalerWidth:F0}×{p.BeamPrimaryWalerDepth:F0} @ {primarySpacing:F0} → đầu U/{p.SelectedScaffoldSystems.ToDisplayText()} {scaffoldBay:F0} → bản đế/tấm kê; thành dầm {res.BeamSidePanelStiffenerCount} nẹp @≤{sideSpacing:F0}; {res.BeamClampStationCount} vị trí gông tại [{res.BeamClampLayoutText}] mm.{ScaffoldManufacturerNote(p)}";
 
             string prefix = !string.IsNullOrEmpty(p.SelectedFloorDetailName) ? $"[{p.SelectedFloorDetailName}] " : "";
             res.ReportItems.Add(BuildReportItem(prefix, "Ván đáy: Kiểm tra ứng suất", res.BeamBottomPlywood.StressResult, p.IsBeamSelected));
@@ -689,18 +725,22 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.ReportItems.Add(BuildReportItem(prefix, "Ván thành: Kiểm tra cắt", res.BeamSidePlywood.ShearResult, p.IsBeamSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Ván thành: Kiểm tra độ võng", res.BeamSidePlywood.DeflectionResult, p.IsBeamSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Gông thành: Kiểm tra ứng suất", res.BeamSideYoke.StressResult, p.IsBeamSelected));
-            res.ReportItems.Add(BuildReportItem(prefix, "Ty giằng D16: Kiểm tra kéo", res.BeamTieRod.StressResult, p.IsBeamSelected));
+            res.ReportItems.Add(BuildReportItem(prefix, "Ty giằng xuyên thành dầm: Kiểm tra kéo", res.BeamTieRod.StressResult, p.IsBeamSelected));
             if (p.BeamPlacementModeIndex == 2)
             {
                 res.ReportItems.Add(BuildReportItem(prefix, "DẦM BIÊN · Ty chết trên mặt: kiểm tra kéo", res.BeamEdgeSurfaceTieRod.StressResult, p.IsBeamSelected));
                 res.ReportItems.Add(BuildReportItem(prefix, "DẦM BIÊN · Ty chết trên mặt: kiểm tra chiều dài neo", res.BeamEdgeSurfaceTieRod.DeflectionResult, p.IsBeamSelected));
             }
-            res.ReportItems.Add(BuildReportItem(prefix, "Chống xiên thành dầm biên", res.BeamSideBrace.StressResult, p.IsBeamSelected));
-            AddVerticalSupportReportItems(res, prefix, p.IsBeamSelected, p.IsGroundLevel);
+            if (p.BeamPlacementModeIndex == 2)
+                res.ReportItems.Add(BuildReportItem(prefix, "Chống xiên thành dầm biên", res.BeamSideBrace.StressResult, p.IsBeamSelected));
+            AddVerticalSupportReportItems(res, prefix, p.IsBeamSelected, p.IsGroundLevel, p);
 
-            bool sideRestraintOk = p.BeamPlacementModeIndex == 1 ? res.BeamTieRod.IsOk :
-                                   p.BeamPlacementModeIndex == 2 ? res.BeamSideBrace.IsOk && res.BeamEdgeSurfaceTieRod.IsOk :
-                                   res.BeamTieRod.IsOk && res.BeamSideBrace.IsOk;
+            // Auto/unclassified (0) is not evidence that a beam is at the perimeter.
+            // ApplyIntersectionContext promotes a classified edge beam to mode 2;
+            // otherwise only the through-tie requirement is enforced.
+            bool sideRestraintOk = p.BeamPlacementModeIndex == 2
+                ? res.BeamTieRod.IsOk && res.BeamSideBrace.IsOk && res.BeamEdgeSurfaceTieRod.IsOk
+                : res.BeamTieRod.IsOk;
             res.IsSystemOk = res.BeamBottomPlywood.IsOk && res.BeamSecondaryJoist.IsOk &&
                              res.BeamPrimaryWaler.IsOk && res.BeamSidePlywood.IsOk && res.BeamSideYoke.IsOk &&
                              sideRestraintOk && res.BeamStripping.IsOk && res.BeamVibrationProcedure.IsOk &&
@@ -856,6 +896,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
 
         public static CalculationResult CheckColumnSafety(CalculationParameters p)
         {
+            NormalizeColumnPushPullProfile(p);
             NormalizeColumnYokeLayout(p);
             var res = new CalculationResult();
             double height = Math.Max(200.0, p.ColumnHeight);
@@ -1008,18 +1049,33 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             // a real calculation effect: edge/corner columns can receive doubled or
             // tripled inward props instead of being locked to one prop per direction.
             int supportedBraceDirections = Math.Max(0, Math.Min(4, p.ColumnSupportedBraceDirectionCount));
-            int totalRestraints = Math.Max(1, p.ColumnBraceCount);
-            int activeBraces = p.ColumnIsBoundaryOrCorner
-                ? Math.Max(1, totalRestraints / Math.Max(1, supportedBraceDirections))
-                : Math.Max(1, (int)Math.Ceiling(totalRestraints / 2.0));
+            int layoutDirections = Math.Max(1, supportedBraceDirections);
+            // A column face can accept at most two independent push-pull props without
+            // a separately designed distribution rail. Keep the engineering credit
+            // equal to the geometry that the native and retained-mode previews place.
+            int totalRestraints = supportedBraceDirections == 0
+                ? 0
+                : Math.Min(layoutDirections * 2,
+                    Math.Max(layoutDirections, Math.Max(1, p.ColumnBraceCount)));
+            p.ColumnBraceCount = totalRestraints;
+            int activeBraces = Math.Max(1, totalRestraints / layoutDirections);
             double angleRad = Math.Max(10.0, Math.Min(80.0, p.ColumnBraceAngle)) * Math.PI / 180.0;
             double braceForce = horizontalStabilityLoad / (activeBraces * Math.Cos(angleRad));
             double braceCapacity = Math.Max(0.1, p.ColumnBraceAllowableCapacity);
-            string braceName = p.ColumnBracePlacementModeIndex > 0
+            string braceSystemName = p.ColumnBracePlacementModeIndex > 0
                 ? "Chống xiên/cáp neo vào trong ranh"
                 : p.ColumnIsBoundaryOrCorner ? "Chống xiên + cáp neo" : "Chống xiên điều chỉnh";
+            string braceName = $"{braceSystemName} D{p.ColumnBraceDiameter:F0}×{p.ColumnBraceThickness:F1}";
             res.ColumnBrace.StressResult = new KetQuaTinhToan(braceName, "Lực dọc ổn định", LoaiKiemTra.ChiuLucDoc,
                 "N=H_d/(n·cosα) ≤ [N]", braceForce, braceCapacity, "kN");
+            // Two nonparallel restraint axes are the minimum geometric stability
+            // invariant.  Express the lower-bound rule as a utilization check so it
+            // participates in the existing result/report pipeline.
+            res.ColumnBrace.ShearResult = new KetQuaTinhToan(
+                $"Bố trí chống cột · {supportedBraceDirections} phương có mặt tựa",
+                "Đủ hai phương chống độc lập", LoaiKiemTra.Khac,
+                "2/max(1,n_phương_đỡ) ≤ 1", 2.0 / Math.Max(1, supportedBraceDirections),
+                1.0, "-");
             double braceVerticalReaction = braceForce * Math.Sin(angleRad);
             double braceBaseArea = Math.Max(100.0, p.SupportBasePlateWidth * p.SupportBasePlateDepth);
             res.ColumnBraceBaseBearing.StressResult = new KetQuaTinhToan("Đế chống xiên", "Ép mặt cục bộ", LoaiKiemTra.Khac,
@@ -1051,6 +1107,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
             res.ReportItems.Add(BuildReportItem(prefix, yokeName + ": Kiểm tra độ võng", res.ColumnYoke.DeflectionResult, p.IsColumnSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Ty giằng và bát chuồn: Kiểm tra lực kéo", res.ColumnTieRod.StressResult, p.IsColumnSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Chống xiên/cáp neo: Kiểm tra ổn định", res.ColumnBrace.StressResult, p.IsColumnSelected));
+            res.ReportItems.Add(BuildReportItem(prefix, "Chống xiên/cáp neo: Kiểm tra đủ hai phương", res.ColumnBrace.ShearResult, p.IsColumnSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Đế chống xiên: Kiểm tra ép mặt", res.ColumnBraceBaseBearing.StressResult, p.IsColumnSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Cáp giằng: Kiểm tra lực kéo", res.ColumnCable.StressResult, p.IsColumnSelected));
             res.ReportItems.Add(BuildReportItem(prefix, "Tăng đơ: Kiểm tra lực kéo", res.ColumnTurnbuckle.StressResult, p.IsColumnSelected));
@@ -1063,6 +1120,30 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                              res.ColumnTieRod.IsOk && res.ColumnBrace.IsOk && res.ColumnBraceBaseBearing.IsOk && res.ColumnCable.IsOk &&
                              res.ColumnTurnbuckle.IsOk && res.ColumnAnchor.IsOk && res.ColumnPlumb.IsOk && res.ColumnPouring.IsOk;
             return res;
+        }
+
+        private static void NormalizeBeamPushPullProfile(CalculationParameters p)
+        {
+            NativeAccessoryFamilyDimensionPolicy.PushPullProfile profile =
+                NativeAccessoryFamilyDimensionPolicy.GetPushPullProfile(
+                    p.BeamSideBraceAllowableCapacity,
+                    p.BeamSideBraceDiameter,
+                    p.BeamSideBraceThickness);
+            p.BeamSideBraceDiameter = profile.OuterDiameterMm;
+            p.BeamSideBraceThickness = profile.WallThicknessMm;
+            p.BeamSideBraceAllowableCapacity = profile.RatedCapacityKn;
+        }
+
+        private static void NormalizeColumnPushPullProfile(CalculationParameters p)
+        {
+            NativeAccessoryFamilyDimensionPolicy.PushPullProfile profile =
+                NativeAccessoryFamilyDimensionPolicy.GetPushPullProfile(
+                    p.ColumnBraceAllowableCapacity,
+                    p.ColumnBraceDiameter,
+                    p.ColumnBraceThickness);
+            p.ColumnBraceDiameter = profile.OuterDiameterMm;
+            p.ColumnBraceThickness = profile.WallThicknessMm;
+            p.ColumnBraceAllowableCapacity = profile.RatedCapacityKn;
         }
 
         public static KetQuaHienThi BuildReportItem(string prefix, string title, KetQuaTinhToan kq, bool isFloorSelected)
@@ -1157,33 +1238,21 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
 
         private static bool UpgradeBeamSideBrace(CalculationParameters p, List<string> adjustments)
         {
-            // Rated push-pull/brace profiles used as a discrete accessory catalogue.
-            // Capacity changes only together with the selected physical cross-section.
-            var catalogue = new[]
+            if (NativeAccessoryFamilyDimensionPolicy.TryGetNextPushPullProfile(
+                    p.BeamSideBraceAllowableCapacity, p.BeamSideBraceDiameter,
+                    p.BeamSideBraceThickness,
+                    out NativeAccessoryFamilyDimensionPolicy.PushPullProfile profile,
+                    90.0))
             {
-                (d: 48.0, t: 2.0, rated: 15.0),
-                (d: 48.0, t: 3.2, rated: 25.0),
-                (d: 60.0, t: 3.2, rated: 40.0),
-                (d: 76.0, t: 3.2, rated: 60.0),
-                (d: 89.0, t: 4.0, rated: 90.0)
-            };
-            double currentArea = Math.PI / 4.0 *
-                (p.BeamSideBraceDiameter * p.BeamSideBraceDiameter -
-                 Math.Pow(Math.Max(0.0, p.BeamSideBraceDiameter - 2.0 * p.BeamSideBraceThickness), 2));
-            for (int i = 0; i < catalogue.Length; i++)
-            {
-                double inner = Math.Max(0.0, catalogue[i].d - 2.0 * catalogue[i].t);
-                double area = Math.PI / 4.0 * (catalogue[i].d * catalogue[i].d - inner * inner);
-                if (area > currentArea + 0.1 || catalogue[i].rated > p.BeamSideBraceAllowableCapacity + 0.1)
-                {
-                    double oldD = p.BeamSideBraceDiameter;
-                    double oldT = p.BeamSideBraceThickness;
-                    p.BeamSideBraceDiameter = catalogue[i].d;
-                    p.BeamSideBraceThickness = catalogue[i].t;
-                    p.BeamSideBraceAllowableCapacity = catalogue[i].rated;
-                    adjustments.Add($"Tiết diện chống xiên dầm: D{oldD:F0}×{oldT:F1} → D{catalogue[i].d:F0}×{catalogue[i].t:F1} mm ([N]={catalogue[i].rated:F0} kN/thanh)");
-                    return true;
-                }
+                double oldD = p.BeamSideBraceDiameter;
+                double oldT = p.BeamSideBraceThickness;
+                p.BeamSideBraceDiameter = profile.OuterDiameterMm;
+                p.BeamSideBraceThickness = profile.WallThicknessMm;
+                p.BeamSideBraceAllowableCapacity = profile.RatedCapacityKn;
+                adjustments.Add($"Tiết diện chống xiên dầm: D{oldD:F0}×{oldT:F1} → " +
+                                $"D{profile.OuterDiameterMm:F0}×{profile.WallThicknessMm:F1} mm " +
+                                $"([N]={profile.RatedCapacityKn:F0} kN/thanh)");
+                return true;
             }
             if (p.BeamSideBraceCountPerStation < 4)
             {
@@ -1263,14 +1332,36 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                 adjustments.Add($"{name}: cấp {current:F0} → {next:F0} kN");
                 return true;
             }
-            bool restraintSystemFails = !result.ColumnBrace.IsOk ||
+            bool UpgradeColumnBraceProfile()
+            {
+                if (!NativeAccessoryFamilyDimensionPolicy.TryGetNextPushPullProfile(
+                        p.ColumnBraceAllowableCapacity, p.ColumnBraceDiameter,
+                        p.ColumnBraceThickness,
+                        out NativeAccessoryFamilyDimensionPolicy.PushPullProfile profile))
+                    return false;
+                double oldD = p.ColumnBraceDiameter;
+                double oldT = p.ColumnBraceThickness;
+                double oldCapacity = p.ColumnBraceAllowableCapacity;
+                p.ColumnBraceDiameter = profile.OuterDiameterMm;
+                p.ColumnBraceThickness = profile.WallThicknessMm;
+                p.ColumnBraceAllowableCapacity = profile.RatedCapacityKn;
+                adjustments.Add($"Chống đẩy-kéo cột: D{oldD:F0}×{oldT:F1} / {oldCapacity:F0} kN → " +
+                                $"D{profile.OuterDiameterMm:F0}×{profile.WallThicknessMm:F1} / " +
+                                $"{profile.RatedCapacityKn:F0} kN");
+                return true;
+            }
+            bool braceCapacityFails = result.ColumnBrace.StressResult != null &&
+                                      !result.ColumnBrace.StressResult.IsThoaman;
+            bool braceLayoutFails = result.ColumnBrace.ShearResult != null &&
+                                    !result.ColumnBrace.ShearResult.IsThoaman;
+            bool restraintSystemFails = braceCapacityFails ||
                                         !result.ColumnCable.IsOk ||
                                         !result.ColumnTurnbuckle.IsOk ||
                                         !result.ColumnAnchor.IsOk;
             if (restraintSystemFails)
             {
                 int supportedDirections = Math.Max(1, Math.Min(4, p.ColumnSupportedBraceDirectionCount));
-                int maximumAssemblies = Math.Max(16, supportedDirections * 8);
+                int maximumAssemblies = supportedDirections * 2;
                 if (p.ColumnBraceCount < maximumAssemblies)
                 {
                     int old = p.ColumnBraceCount;
@@ -1280,10 +1371,12 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                                     $"({assembliesPerDirection} cụm/hướng có điểm đỡ)");
                     changed = true;
                 }
-                else if (!result.ColumnBrace.IsOk)
-                    changed |= UpgradeCapacity(() => p.ColumnBraceAllowableCapacity,
-                        value => p.ColumnBraceAllowableCapacity = value, "Chống đẩy-kéo cột (nâng tiết diện)");
+                else if (braceCapacityFails)
+                    changed |= UpgradeColumnBraceProfile();
             }
+            if (braceLayoutFails && !adjustments.Any(item =>
+                    item.StartsWith("Bố trí chống cột", StringComparison.Ordinal)))
+                adjustments.Add("Bố trí chống cột: chưa đủ hai phương có mặt tựa; phải đổi vị trí chân/neo theo hình học Revit, không thể khắc phục bằng tăng đường kính chống.");
             if (!result.ColumnCable.IsOk)
                 changed |= UpgradeCapacity(() => p.ColumnCableAllowableCapacity,
                     value => p.ColumnCableAllowableCapacity = value, "Cáp giằng (nâng đường kính)");
@@ -1432,14 +1525,15 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                         changed |= ReduceParameter(() => p.BeamPrimaryWalerSpacing, v => { p.BeamPrimaryWalerSpacing = v; p.BeamPropSpacing = Math.Min(p.BeamPropSpacing, v); }, 100, 100, "Bước xà gồ chính dầm", design.Adjustments) ||
                                    IncreaseParameter(() => p.BeamSecondaryJoistDepth, v => p.BeamSecondaryJoistDepth = v, 300, 25, "Chiều cao xà gồ phụ dầm", design.Adjustments);
                     if (!beamResult.BeamPrimaryWaler.IsOk)
-                        changed |= ReduceParameter(() => p.BeamScaffoldBayWidth, v => p.BeamScaffoldBayWidth = v, 100, 100, "Nhịp ngang Ringlock", design.Adjustments) ||
+                        changed |= ReduceParameter(() => p.BeamScaffoldBayWidth, v => p.BeamScaffoldBayWidth = v, 300, 100,
+                                       $"Nhịp ngang {p.SelectedScaffoldSystems.ToDisplayText()}", design.Adjustments) ||
                                    IncreaseParameter(() => p.BeamPrimaryWalerDepth, v => p.BeamPrimaryWalerDepth = v, 300, 25, "Chiều cao xà gồ chính dầm", design.Adjustments);
                     if (!beamResult.BeamSidePlywood.IsOk)
                         changed |= ReduceParameter(() => p.BeamSideYokeSpacing, v => p.BeamSideYokeSpacing = v, 75, 50, "Bước nẹp thành dầm", design.Adjustments) ||
                                    IncreaseParameter(() => p.BeamSidePlywoodThickness, v => p.BeamSidePlywoodThickness = v, 40, 3, "Chiều dày ván thành dầm", design.Adjustments);
                     if (!beamResult.BeamSideYoke.IsOk)
                         changed |= IncreaseParameter(() => p.BeamPrimaryWalerDepth, v => p.BeamPrimaryWalerDepth = v, 300, 25, "Chiều cao gông/nẹp thành", design.Adjustments);
-                    if (!beamResult.BeamTieRod.IsOk && p.BeamPlacementModeIndex != 2)
+                    if (!beamResult.BeamTieRod.IsOk)
                         changed |= UpgradeBeamTieRod(p, design.Adjustments);
                     if (p.BeamPlacementModeIndex == 2 && !beamResult.BeamEdgeSurfaceTieRod.IsOk)
                     {
@@ -1457,7 +1551,7 @@ namespace DALTUDTXD_68TH4_PMTKVK_REVITAPI.Models
                                 v => p.BeamEdgeSurfaceTieRodAnchorLength = v, 2400, 100,
                                 "Chiều dài neo ty chết dầm biên", design.Adjustments);
                     }
-                    if (!beamResult.BeamSideBrace.IsOk && p.BeamPlacementModeIndex != 1)
+                    if (!beamResult.BeamSideBrace.IsOk && p.BeamPlacementModeIndex == 2)
                         changed |= UpgradeBeamSideBrace(p, design.Adjustments);
                     if (!beamResult.BeamStripping.IsOk && p.BeamStrippingStrengthPercent < 70)
                     {
